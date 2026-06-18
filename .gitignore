@@ -79,4 +79,17 @@ __recovery/
 *.stat
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
-modules/
+/modules/
+/.github
+AGENTS.md
+/bin/proxy
+/docs
+/proxy
+/temp-file
+sources/shared/types/.gitkeep
+sources/shared/middleware/.gitkeep
+sources/tests/integration/.gitkeep
+sources/tests/unit/.gitkeep
+sources/infrastructure/external/.gitkeep
+sources/infrastructure/security/.gitkeep
+sources/infrastructure/logging/.gitkeep
