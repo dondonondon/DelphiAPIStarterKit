@@ -90,7 +90,10 @@ uses
   BFA.Helper.Dataset,
   BFA.Core.Response,
   RestAPI.User,
-  RestAPI.Auth;
+  RestAPI.Auth,
+  RestAPI.Product,
+  RestAPI.Category,
+  RestAPI.Customer;
 
 procedure WriteCoreErrorLog(const ASource: string; AException: Exception);
 var
@@ -204,42 +207,47 @@ begin
 
   LDataRequest := nil;
   try
-    LDataRequest := LoadRequestData(AJSON);
-  except
-    on E: Exception do
-    begin
-      WriteCoreErrorLog('Core request data error', E);
-      AStatusCode := STATUS_INTERNAL_ERROR;
-      Exit(BuildErrorResponse(AStatusCode, MSG_INTERNAL_ERROR));
-    end;
-  end;
-
-  try
-    if not ResolveAPIClass(LClass) then
-    begin
-      AStatusCode := STATUS_NOT_FOUND;
-      Exit(BuildErrorResponse(AStatusCode, MSG_CLASS_NOT_FOUND));
-    end;
-
-    LInstance := LClass.Create;
     try
-      Result := InvokeRouteMethod(LInstance, LDataRequest, AWebAction, ARequest, AResponse, AStatusCode);
-    finally
-      FreeAndNil(LInstance);
+      LDataRequest := LoadRequestData(AJSON);
+    except
+      on E: Exception do
+      begin
+        WriteCoreErrorLog('Core request data error', E);
+        AStatusCode := STATUS_INTERNAL_ERROR;
+        Exit(BuildErrorResponse(AStatusCode, MSG_INTERNAL_ERROR));
+      end;
     end;
-  except
-    on E: Exception do
-    begin
-      WriteCoreErrorLog('Core dispatch error', E);
-      AStatusCode := STATUS_INTERNAL_ERROR;
-      Result := BuildErrorResponse(AStatusCode, MSG_INTERNAL_ERROR);
+
+    try
+      if not ResolveAPIClass(LClass) then
+      begin
+        AStatusCode := STATUS_NOT_FOUND;
+        Exit(BuildErrorResponse(AStatusCode, MSG_CLASS_NOT_FOUND));
+      end;
+
+      LInstance := LClass.Create;
+      try
+        Result := InvokeRouteMethod(LInstance, LDataRequest, AWebAction, ARequest, AResponse, AStatusCode);
+      finally
+        FreeAndNil(LInstance);
+      end;
+    except
+      on E: Exception do
+      begin
+        WriteCoreErrorLog('Core dispatch error', E);
+        AStatusCode := STATUS_INTERNAL_ERROR;
+        Result := BuildErrorResponse(AStatusCode, MSG_INTERNAL_ERROR);
+      end;
     end;
+  finally
+    FreeAndNil(LDataRequest);
   end;
 end;
 
 procedure RegisterClassAPI;
 begin
-  RegisterClassAPI([TRestClassV1User, TRestClassV1Auth]);
+  RegisterClassAPI([TRestClassV1User, TRestClassV1Auth, TRestClassV1Product,
+    TRestClassV1Category, TRestClassV1Customer]);
 end;
 
 procedure RegisterClassAPI(const AClasses: array of TPersistentClass);

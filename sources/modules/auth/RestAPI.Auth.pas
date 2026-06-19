@@ -6,6 +6,7 @@ uses
   System.SysUtils,
   System.Classes,
   FireDAC.Comp.Client,
+  BFA.Core.Helper,
   Web.HTTPApp;
 
 type
@@ -21,7 +22,6 @@ implementation
 
 uses
   BFA.Core.Endpoint,
-  BFA.Core.Helper,
   BFA.Core.Response,
   Auth.Service;
 

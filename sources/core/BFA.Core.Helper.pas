@@ -8,6 +8,14 @@ uses
   Web.HTTPApp;
 
 type
+  APIResourceAttribute = class(TCustomAttribute)
+  private
+    FName: string;
+  public
+    constructor Create(const AName: string);
+    property Name: string read FName;
+  end;
+
   THelperCore = class
   public
     class function ExecuteStringMethod(AInstance: TObject;
@@ -29,7 +37,11 @@ implementation
 type
   TExecStringMethod = function: string of object;
 
-{ THelperCore }
+constructor APIResourceAttribute.Create(const AName: string);
+begin
+  inherited Create;
+  FName := AName;
+end;
 
 class function THelperCore.ExecuteStringMethod(AInstance: TObject;
   const AActionName: string; out AResult: string): Boolean;

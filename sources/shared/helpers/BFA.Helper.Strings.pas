@@ -16,12 +16,22 @@ uses
 
 type
   TGlobalFunction = class
+  private
+    {$IF DEFINED(LINUX)}
+    class function GetApplicationName: string;
+    {$ENDIF}
+    class function GetStorageBaseDirectory: string;
+    class procedure EnsureDirectory(const APath: string);
+    class function BuildStoragePath(const ASubDirectory, AFileName: string): string;
+  public
     class procedure CreateBaseDirectory;
     class function GetBaseDirectory : String;
     class function LoadFile(AFileName : String) : String;
 
     class procedure SaveSettingString(Section, Name, Value: string);
     class function LoadSettingString(Section, Name, Value: string): string;
+    class procedure SaveSettingStringDir(Section, Name, Value: string);
+    class function LoadSettingStringDir(Section, Name, Value: string): string;
 
     class function ReplaceStr(strSource, strReplaceFrom, strReplaceWith: string; goTrim: Boolean = true): string;
 
@@ -72,33 +82,31 @@ begin
   end;
 end;
 
-class procedure TGlobalFunction.CreateBaseDirectory;
+class function TGlobalFunction.BuildStoragePath(const ASubDirectory,
+  AFileName: string): string;
 begin
-  {$IF DEFINED(MSWINDOWS) OR DEFINED(LINUX)}
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files');
+  Result := TPath.Combine(
+    TPath.Combine(GetBaseDirectory, 'files'),
+    TPath.Combine(ASubDirectory, AFileName)
+  );
+end;
 
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'image') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'image');
+class procedure TGlobalFunction.CreateBaseDirectory;
+var
+  BaseDir: string;
+begin
+  BaseDir := GetStorageBaseDirectory;
 
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + PathDelim + 'files' + PathDelim + 'image' + PathDelim + 'original') then
-    CreateDir(ExpandFileName(GetCurrentDir) + PathDelim + 'files' + PathDelim + 'image' + PathDelim + 'original');
-
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + PathDelim + 'files' + PathDelim + 'image' + PathDelim + 'cropped') then
-    CreateDir(ExpandFileName(GetCurrentDir) + PathDelim + 'files' + PathDelim + 'image' + PathDelim + 'cropped');
-
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'doc') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'doc');
-
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'video') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'video');
-
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'music') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'music');
-
-  if not DirectoryExists(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'other') then
-    CreateDir(ExpandFileName(GetCurrentDir) + System.SysUtils.PathDelim + 'files' + System.SysUtils.PathDelim + 'other');
-  {$ENDIF}
+  EnsureDirectory(BaseDir);
+  EnsureDirectory(TPath.Combine(BaseDir, 'files'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'image'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'image'), 'original'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'image'), 'cropped'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'doc'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'video'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'music'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'other'));
+  EnsureDirectory(TPath.Combine(TPath.Combine(BaseDir, 'files'), 'log'));
 end;
 
 class function TGlobalFunction.DecodeBase64(AString: String): String;
@@ -192,14 +200,38 @@ begin
   end;
 end;
 
+class procedure TGlobalFunction.EnsureDirectory(const APath: string);
+begin
+  if not DirectoryExists(APath) then
+    ForceDirectories(APath);
+end;
+
 class function TGlobalFunction.GetBaseDirectory: String;
 begin
   CreateBaseDirectory;
+  Result := IncludeTrailingPathDelimiter(GetStorageBaseDirectory);
+end;
 
+{$IF DEFINED(LINUX)}
+class function TGlobalFunction.GetApplicationName: string;
+begin
+  Result := ChangeFileExt(ExtractFileName(ParamStr(0)), '');
+
+  if Result = '' then
+    Result := 'application';
+end;
+{$ENDIF}
+
+class function TGlobalFunction.GetStorageBaseDirectory: string;
+begin
   {$IF DEFINED(IOS) or DEFINED(ANDROID)}
-    Result := TPath.GetDocumentsPath + PathDelim;
-  {$ELSEIF DEFINED(MSWINDOWS) OR DEFINED(LINUX)}
-    Result := ExpandFileName(GetCurrentDir) + PathDelim;
+  Result := TPath.GetDocumentsPath;
+  {$ELSEIF DEFINED(MSWINDOWS)}
+  Result := ExpandFileName(GetCurrentDir);
+  {$ELSEIF DEFINED(LINUX)}
+  Result := TPath.Combine('/var/lib', GetApplicationName);
+  {$ELSE}
+  Result := ExpandFileName(GetCurrentDir);
   {$ENDIF}
 end;
 
@@ -210,24 +242,26 @@ end;
 
 class function TGlobalFunction.LoadFile(AFileName: String): String;
 var
-  FExtension, FPath : String;
+  FExtension: String;
 begin
-  FPath := GetBaseDirectory;
   FExtension := LowerCase(ExtractFileExt(AFileName));
 
   if (FExtension = '.jpg') or (FExtension = '.jpeg') or (FExtension = '.png') or (FExtension = '.bmp') then
-    Result := FPath + 'files' + System.SysUtils.PathDelim + 'image' + System.SysUtils.PathDelim + AFileName
+    Result := BuildStoragePath('image', AFileName)
 
   else if (FExtension = '.doc') or (FExtension = '.pdf') or (FExtension = '.csv') or (FExtension = '.txt') or (FExtension = '.xls') then
-    Result := FPath + 'files' + System.SysUtils.PathDelim + 'doc' + System.SysUtils.PathDelim + AFileName
+    Result := BuildStoragePath('doc', AFileName)
 
   else if (FExtension = '.mp4') or (FExtension = '.avi') or (FExtension = '.wmv') or (FExtension = '.flv') or (FExtension = '.mov') or (FExtension = '.mkv') or (FExtension = '.3gp') then
-    Result := FPath + 'files' + System.SysUtils.PathDelim + 'video' + System.SysUtils.PathDelim + AFileName
+    Result := BuildStoragePath('video', AFileName)
+
+  else if (FExtension = '.log') then
+    Result := BuildStoragePath('log', AFileName)
 
   else if (FExtension = '.mp3') or (FExtension = '.wav') or (FExtension = '.wma') or (FExtension = '.aac') or (FExtension = '.flac') or (FExtension = '.m4a') then
-    Result := FPath + 'files' + System.SysUtils.PathDelim + 'music' + System.SysUtils.PathDelim + AFileName
+    Result := BuildStoragePath('music', AFileName)
   else
-    Result := FPath + 'files' + System.SysUtils.PathDelim + 'other' + System.SysUtils.PathDelim + AFileName
+    Result := BuildStoragePath('other', AFileName);
 end;
 
 class function TGlobalFunction.LoadSettingString(Section, Name,
@@ -236,6 +270,19 @@ var
   ini: TIniFile;
 begin
   ini := TIniFile.Create(LoadFile('config.ini'));
+  try
+    Result := ini.ReadString(Section, Name, Value);
+  finally
+    FreeAndNil(ini);
+  end;
+end;
+
+class function TGlobalFunction.LoadSettingStringDir(Section, Name,
+  Value: string): string;
+var
+  ini: TIniFile;
+begin
+  ini := TIniFile.Create(TPath.Combine(GetBaseDirectory, 'config.ini'));
   try
     Result := ini.ReadString(Section, Name, Value);
   finally
@@ -280,6 +327,19 @@ var
   ini: TIniFile;
 begin
   ini := TIniFile.Create(LoadFile('config.ini'));
+  try
+    ini.WriteString(Section, Name, Value);
+  finally
+    FreeAndNil(ini);
+  end;
+end;
+
+class procedure TGlobalFunction.SaveSettingStringDir(Section, Name,
+  Value: string);
+var
+  ini: TIniFile;
+begin
+  ini := TIniFile.Create(TPath.Combine(GetBaseDirectory, 'config.ini'));
   try
     ini.WriteString(Section, Name, Value);
   finally
