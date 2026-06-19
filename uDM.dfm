@@ -4,10 +4,7 @@ object DM: TDM
   Width = 640
   object Con: TFDConnection
     Params.Strings = (
-      'Server=192.168.0.250'
-      'User_Name=blangkonfa'
-      'Password=Dondonondon270994123!@#'
-      'Database=pos_nepal'
+      'Server='
       'DriverID=MySQL')
     LoginPrompt = False
     Left = 80

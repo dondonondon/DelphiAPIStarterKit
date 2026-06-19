@@ -1,4 +1,4 @@
-unit RestAPI.User;
+unit RestAPI.Product;
 
 interface
 
@@ -10,8 +10,8 @@ uses
   Web.HTTPApp;
 
 type
-  [APIResource('User')]
-  TRestClassV1User = class(TPersistent)
+  [APIResource('Product')]
+  TRestClassV1Product = class(TPersistent)
   published
     function Route(AConnection: TFDConnection; AData: TFDMemTable;
       AWebAction: TWebActionItem; ARequest: TWebRequest;
@@ -23,23 +23,23 @@ implementation
 uses
   BFA.Core.Endpoint,
   BFA.Core.Response,
-  User.Service;
+  Product.Service;
 
-function TRestClassV1User.Route(AConnection: TFDConnection; AData: TFDMemTable;
-  AWebAction: TWebActionItem; ARequest: TWebRequest; AResponse: TWebResponse;
-  out AStatusCode: Integer): String;
+function TRestClassV1Product.Route(AConnection: TFDConnection;
+  AData: TFDMemTable; AWebAction: TWebActionItem; ARequest: TWebRequest;
+  AResponse: TWebResponse; out AStatusCode: Integer): String;
 begin
   Result := THelperEndpoint.ExecuteRoute(
     AData,
     ARequest,
-    TUserService,
-    ['ChangePassword', 'ResetPassword'],
+    TProductService,
+    [],
     function(const AActionName: string; const AParts: TArray<string>;
       out ARouteStatusCode: Integer): string
     var
-      LService: TUserService;
+      LService: TProductService;
     begin
-      LService := TUserService.Create(AConnection, AData, ARequest, AParts);
+      LService := TProductService.Create(AConnection, AData, ARequest, AParts);
       try
         if not THelperCore.ExecuteStringMethod(LService, AActionName, Result) then begin
           ARouteStatusCode := 405;
@@ -52,7 +52,7 @@ begin
       end;
     end,
     AStatusCode,
-    'User route error'
+    'Product route error'
   );
 end;
 
