@@ -1201,8 +1201,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Android64'">
@@ -1210,8 +1209,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='iOSDevice64'">
@@ -1219,8 +1217,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='iOSSimARM64'">
@@ -1228,8 +1225,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Linux64'">
@@ -1237,8 +1233,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='OSX64'">
@@ -1246,8 +1241,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='OSXARM64'">
@@ -1255,8 +1249,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win32'">
@@ -1264,8 +1257,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Debug' And '$(Platform)'=='Win64'">
@@ -1273,8 +1265,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Android'">
@@ -1282,8 +1273,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Android64'">
@@ -1291,8 +1281,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='iOSDevice64'">
@@ -1300,8 +1289,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='iOSSimARM64'">
@@ -1309,8 +1297,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Linux64'">
@@ -1318,8 +1305,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='OSX64'">
@@ -1327,8 +1313,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='OSXARM64'">
@@ -1336,18 +1321,15 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win32'">
-        <PreBuildEvent>cmd /c &quot;CloseApp.bat&quot;
-</PreBuildEvent>
+        <PreBuildEvent>cmd /c &quot;CloseApp.bat&quot;</PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Config)'=='Release' And '$(Platform)'=='Win64'">
@@ -1355,8 +1337,7 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <PreBuildEventIgnoreExitCode>False</PreBuildEventIgnoreExitCode>
         <PreLinkEvent/>
         <PreLinkEventIgnoreExitCode>False</PreLinkEventIgnoreExitCode>
-        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )
-</PostBuildEvent>
+        <PostBuildEvent>if exist &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; ( call &quot;$(BDS)\ObjRepos\en\dsrest\dsPostBuild.bat&quot; &quot;$(PROJECTDIR)&quot; &quot;$(OUTPUTDIR)&quot; )</PostBuildEvent>
         <PostBuildEventIgnoreExitCode>False</PostBuildEventIgnoreExitCode>
     </PropertyGroup>
 </Project>
