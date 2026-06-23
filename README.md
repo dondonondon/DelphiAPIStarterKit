@@ -1,42 +1,50 @@
 # DelphiAPIStarterKit
 
-`DelphiAPIStarterKit` adalah starter template Delphi WebBroker untuk membuat REST API dan web service dengan struktur yang lebih rapi: routing, response helper, request validation, service layer, repository layer, FireDAC connection factory, dan contoh module CRUD.
+![Delphi](https://img.shields.io/badge/Delphi-12.x%20WebBroker-E62431?style=flat-square&logo=embarcadero&logoColor=white)
+![Database](https://img.shields.io/badge/Database-MySQL%20%7C%20MariaDB-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Architecture](https://img.shields.io/badge/Architecture-Controller%20%2B%20Service%20%2B%20Repository-0E8A16?style=flat-square)
+![Status](https://img.shields.io/badge/Status-Starter%20Template-F59E0B?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
 
-Project ini ditujukan sebagai fondasi awal API backend Delphi, bukan template production yang langsung aman tanpa konfigurasi ulang.
+English | [Bahasa Indonesia](README.id.md)
+
+`DelphiAPIStarterKit` is a Delphi WebBroker starter template for building REST APIs and web services with a clean backend structure: routing, response helpers, request validation, service layer, repository layer, FireDAC connection factory, and practical CRUD modules.
+
+This project is intended as a reusable foundation for Delphi backend APIs. It is not a production-ready deployment template without additional configuration and security review.
 
 ## Features
 
 - Delphi WebBroker API server.
-- FireDAC database access dengan MySQL/MariaDB.
-- Struktur module berbasis `RestAPI`, `Service`, `Repository`, `Validator`, dan `DTO`.
+- FireDAC database access for MySQL/MariaDB.
+- Module structure based on `RestAPI`, `Service`, `Repository`, `Validator`, and `DTO` units.
 - Standard JSON response envelope.
-- Auth example dengan session dan access token.
+- Authentication example with sessions and access tokens.
 - Example modules:
   - Auth
   - Users
   - Category
   - Product
   - Customer
-- Database schema sample di `assets/databases/demo_delphirest.sql`.
-- API documentation dan Postman collection tersedia di folder `docs/api` jika folder docs ikut dipublish.
+- Sample database schema in `assets/databases/demo_delphirest.sql`.
+- API documentation and Postman collection are available under `docs/api` if the docs folder is published.
 
 ## Requirements
 
-- Delphi dengan WebBroker, DataSnap, FireDAC, dan FireDAC MySQL driver.
-- MySQL atau MariaDB server.
-- MySQL/MariaDB native client library sesuai target aplikasi.
-- Windows untuk build default `Win32`.
+- Delphi with WebBroker, DataSnap, FireDAC, and the FireDAC MySQL driver.
+- MySQL or MariaDB server.
+- MySQL/MariaDB native client library matching the application target architecture.
+- Windows for the default `Win32` build target.
 
-Project saat ini memakai Delphi path lokal di `compile.bat`. Sesuaikan path `rsvars.bat` jika versi Delphi berbeda.
+The current `compile.bat` uses a local Delphi installation path. Update the `rsvars.bat` path if your Delphi version is different.
 
 ## Project Structure
 
 ```text
 sources/
-  app/                         WebBroker module dan server bootstrap
+  app/                         WebBroker module and server bootstrap
   core/                        Core routing, response, request, constants, config
   infrastructure/
-    database/                  FireDAC connection factory dan query helper
+    database/                  FireDAC connection factory and query helper
     security/                  Token/security helper
   modules/
     auth/                      Auth endpoint, service, repository, validator, DTO
@@ -54,7 +62,7 @@ assets/
 
 ## JSON Response Format
 
-API response memakai envelope berikut:
+API responses use this envelope:
 
 ```json
 {
@@ -65,23 +73,23 @@ API response memakai envelope berikut:
 }
 ```
 
-Untuk error response, `status` mengikuti HTTP status code dan `data` dikembalikan sebagai array berisi object kosong.
+For error responses, `status` follows the HTTP status code and `data` is returned as an array containing an empty object.
 
 ## Database Setup
 
-Default database name di source saat ini:
+The default database name in the current source code is:
 
 ```text
 demo_delphirest
 ```
 
-Connection default ada di:
+The default connection is configured in:
 
 ```text
 sources/infrastructure/database/DB.ConnectionFactory.pas
 ```
 
-Default local configuration saat ini:
+Current local defaults:
 
 ```text
 Server    = localhost
@@ -91,23 +99,23 @@ Password  =
 Driver    = MySQL
 ```
 
-Untuk production atau public deployment, pindahkan konfigurasi ini ke file config atau environment variable.
+For production or public deployment, move these values to a config file or environment variables.
 
 ### Import Schema via MySQL CLI
 
-Buat database:
+Create the database:
 
 ```bat
 mysql -u root -p -e "CREATE DATABASE demo_delphirest CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 ```
 
-Import schema:
+Import the schema:
 
 ```bat
 mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql
 ```
 
-Jika memakai PowerShell dan redirect bermasalah, jalankan lewat `cmd`:
+If PowerShell causes redirect issues, run the command through `cmd`:
 
 ```bat
 cmd /c "mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql"
@@ -115,52 +123,52 @@ cmd /c "mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql"
 
 ### Import Schema via phpMyAdmin
 
-1. Buka phpMyAdmin.
-2. Buat database `demo_delphirest`.
-3. Pilih database tersebut.
-4. Buka tab `Import`.
-5. Pilih file `assets/databases/demo_delphirest.sql`.
-6. Jalankan import.
+1. Open phpMyAdmin.
+2. Create a database named `demo_delphirest`.
+3. Select the database.
+4. Open the `Import` tab.
+5. Select `assets/databases/demo_delphirest.sql`.
+6. Run the import.
 
 ## MySQL Client Library
 
-FireDAC MySQL membutuhkan native client library yang sesuai bitness aplikasi:
+FireDAC MySQL requires a native client library that matches the application bitness:
 
-- App `Win32` butuh client library 32-bit.
-- App `Win64` butuh client library 64-bit.
+- A `Win32` application requires a 32-bit client library.
+- A `Win64` application requires a 64-bit client library.
 
-Jangan mengambil `libmysql.dll` dari mirror tidak resmi. Gunakan salah satu sumber resmi:
+Do not download `libmysql.dll` from unofficial DLL mirrors. Use one of these official sources:
 
 - MySQL C API / libmysqlclient: https://dev.mysql.com/downloads/c-api/
 - MySQL Connector/C++ package: https://dev.mysql.com/downloads/connector/cpp/
 - MariaDB Connector/C: https://mariadb.com/docs/connectors/mariadb-connector-c
 
-MariaDB Connector/C dapat dipakai untuk koneksi ke MySQL/MariaDB dan dokumentasi MariaDB menyebut library C connector berlisensi LGPLv2.1.
+MariaDB Connector/C can connect to MySQL and MariaDB, and MariaDB documents the C connector as LGPLv2.1 licensed.
 
-### Cara Menambahkan `libmysql.dll`
+### Adding `libmysql.dll`
 
-Opsi paling sederhana:
+Simple setup:
 
-1. Download MySQL/MariaDB client library dari sumber resmi.
-2. Pilih arsitektur yang sama dengan target build Delphi.
-3. Ambil `libmysql.dll` dari package tersebut.
-4. Letakkan `libmysql.dll` di folder yang sama dengan executable, misalnya:
+1. Download the MySQL/MariaDB client library from an official source.
+2. Choose the same architecture as your Delphi build target.
+3. Extract `libmysql.dll` from the package.
+4. Place `libmysql.dll` in the same folder as the executable, for example:
 
 ```text
 bin/libmysql.dll
 ```
 
-atau letakkan folder DLL di `PATH` Windows.
+Alternatively, place the DLL directory in the Windows `PATH`.
 
-Jika menjalankan dari IDE dan current directory berbeda, pastikan `VendorHome` mengarah ke folder yang berisi DLL. Saat ini Windows runtime code mengisi:
+If you run from the IDE and the current directory is different, make sure `VendorHome` points to the directory containing the DLL. The current Windows startup code sets:
 
 ```pascal
 DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
 ```
 
-Artinya aplikasi akan mencari client library berdasarkan current directory. Jika DLL disimpan di folder khusus, sesuaikan `VendorHome` di startup code.
+This means the application looks for the native client library from the current directory. If the DLL is stored elsewhere, adjust `VendorHome` in the startup code.
 
-Rekomendasi untuk open-source repo: jangan commit `libmysql.dll` atau ZIP binary ke repository. Cukup dokumentasikan dependency dan cara install-nya.
+For an open-source repository, the recommended approach is not to commit `libmysql.dll` or binary ZIP files. Document the dependency and let users install the client library from the official vendor package.
 
 ## Build
 
@@ -170,19 +178,19 @@ Default build script:
 compile.bat
 ```
 
-Script ini:
+The script:
 
-- Menghentikan proses `DelphiAPIStarterKit.exe` jika sedang berjalan.
-- Memanggil `rsvars.bat`.
-- Build project via MSBuild.
+- Stops `DelphiAPIStarterKit.exe` if it is already running.
+- Calls `rsvars.bat`.
+- Builds the project via MSBuild.
 
-Jika Delphi terinstall di path atau versi berbeda, ubah path ini:
+If Delphi is installed in a different path or version, update this path:
 
 ```bat
 C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
 ```
 
-Build manual:
+Manual build:
 
 ```bat
 msbuild DelphiAPIStarterKit.dproj /t:Make /p:Config=Debug /p:Platform=Win32 /nologo /v:minimal
@@ -190,12 +198,12 @@ msbuild DelphiAPIStarterKit.dproj /t:Make /p:Config=Debug /p:Platform=Win32 /nol
 
 ## Run
 
-Setelah build, jalankan executable dari output folder. Pastikan:
+After building, run the executable from the output folder. Make sure:
 
-- MySQL/MariaDB server berjalan.
-- Database `demo_delphirest` sudah dibuat dan schema sudah diimport.
-- MySQL client DLL tersedia untuk FireDAC.
-- Port server tidak sedang dipakai aplikasi lain.
+- MySQL/MariaDB server is running.
+- The `demo_delphirest` database exists and the schema has been imported.
+- The MySQL client DLL is available to FireDAC.
+- The server port is not already used by another application.
 
 ## API Route Pattern
 
@@ -205,7 +213,7 @@ Base route:
 /api/v1/{resource}
 ```
 
-Contoh:
+Examples:
 
 ```text
 POST   /api/v1/auth/Login
@@ -220,39 +228,39 @@ GET    /api/v1/products
 GET    /api/v1/customers
 ```
 
-Route akan diarahkan ke class dengan pola:
+Routes are resolved to classes using this pattern:
 
 ```text
 TRestClass{APIVersion}{RequestClass}
 ```
 
-Contoh:
+Example:
 
 ```text
 /api/v1/users -> TRestClassV1User
 ```
 
-Setelah itu request masuk ke method `Route`, lalu dipetakan ke service action.
+The request then enters the class `Route` method and is mapped to a service action.
 
-## Menambahkan Endpoint Baru
+## Adding a New Endpoint
 
-Contoh menambahkan resource `orders`.
+Example: adding an `orders` resource.
 
-### 1. Buat Folder Module
+### 1. Create the Module Folder
 
 ```text
 sources/modules/orders/
 ```
 
-### 2. Buat Unit DTO
+### 2. Create the DTO Unit
 
-Contoh nama file:
+Example file:
 
 ```text
 sources/modules/orders/Order.DTO.pas
 ```
 
-Isi DTO dengan record request/response yang eksplisit, misalnya:
+Keep request and response records explicit:
 
 ```pascal
 type
@@ -263,17 +271,17 @@ type
   end;
 ```
 
-### 3. Buat Validator
+### 3. Create the Validator
 
-Contoh nama file:
+Example file:
 
 ```text
 sources/modules/orders/Order.Validator.pas
 ```
 
-Validator bertugas membaca dan memvalidasi `TFDMemTable` request sebelum business logic berjalan.
+The validator reads and validates the `TFDMemTable` request before business logic runs.
 
-Gunakan helper yang sudah ada seperti:
+Use existing helpers where possible:
 
 ```pascal
 THelperValidator.GetRequiredString(...)
@@ -281,15 +289,15 @@ THelperValidator.GetOptionalString(...)
 THelperValidator.ParseIntegerField(...)
 ```
 
-### 4. Buat Repository
+### 4. Create the Repository
 
-Contoh nama file:
+Example file:
 
 ```text
 sources/modules/orders/Order.Repository.pas
 ```
 
-Repository hanya berisi akses database. Gunakan parameterized query:
+Repositories should contain database access only. Use parameterized queries:
 
 ```pascal
 TQueryFunction.SQLAdd(LDataset,
@@ -302,19 +310,19 @@ TQueryFunction.SQLParamByName(LDataset, 'notes', ANotes);
 TQueryFunction.ExecSQL(LDataset);
 ```
 
-Jangan concat raw user input ke SQL.
+Do not concatenate raw user input into SQL.
 
-### 5. Buat Service
+### 5. Create the Service
 
-Contoh nama file:
+Example file:
 
 ```text
 sources/modules/orders/Order.Service.pas
 ```
 
-Service berisi business logic, transaction handling, dan pemanggilan repository.
+Services contain business logic, transaction handling, and repository calls.
 
-Pola write operation:
+Write operation pattern:
 
 ```pascal
 FConnection.StartTransaction;
@@ -329,15 +337,15 @@ except
 end;
 ```
 
-### 6. Buat RestAPI Unit
+### 6. Create the RestAPI Unit
 
-Contoh nama file:
+Example file:
 
 ```text
 sources/modules/orders/RestAPI.Order.pas
 ```
 
-Class harus mengikuti naming route:
+The class must match the route naming pattern:
 
 ```pascal
 type
@@ -349,37 +357,37 @@ type
   end;
 ```
 
-Di dalam `Route`, gunakan `THelperEndpoint.ExecuteRoute` seperti module lain.
+Inside `Route`, use `THelperEndpoint.ExecuteRoute` like the existing modules.
 
-### 7. Register Class API
+### 7. Register the API Class
 
-Tambahkan unit baru ke `uses` di:
+Add the new unit to the `uses` clause in:
 
 ```text
 sources/core/BFA.Core.Rest.pas
 ```
 
-Lalu register class di `RegisterClassAPI`:
+Then register the class in `RegisterClassAPI`:
 
 ```pascal
 RegisterClassAPI([TRestClassV1User, TRestClassV1Auth, TRestClassV1Product,
   TRestClassV1Category, TRestClassV1Customer, TRestClassV1Order]);
 ```
 
-### 8. Tambahkan Unit ke Project
+### 8. Add Units to the Project
 
-Tambahkan unit baru ke:
+Add the new units to:
 
 - `DelphiAPIStarterKit.dpr`
 - `DelphiAPIStarterKit.dproj`
 
-Jika memakai Delphi IDE, tambahkan unit melalui project manager agar `.dproj` ikut diperbarui.
+If you use the Delphi IDE, add the units through the Project Manager so the `.dproj` file is updated.
 
-### 9. Tambahkan Database Table
+### 9. Add the Database Table
 
-Buat migration/schema update untuk table baru di folder database asset atau migration docs.
+Create a migration/schema update in the database assets or migration docs.
 
-Contoh:
+Example:
 
 ```sql
 CREATE TABLE `orders` (
@@ -398,13 +406,13 @@ CREATE TABLE `orders` (
 
 ### 10. Update API Documentation
 
-Tambahkan dokumentasi endpoint baru di:
+Add endpoint documentation:
 
 ```text
 docs/api/orders.md
 ```
 
-Update Postman collection jika digunakan:
+Update the Postman collection if used:
 
 ```text
 docs/api/postman.collection.json
@@ -412,7 +420,7 @@ docs/api/postman.collection.json
 
 ## Current Database Tables
 
-Schema sample saat ini berisi:
+The sample schema contains:
 
 - `m_role`
 - `users`
@@ -422,7 +430,7 @@ Schema sample saat ini berisi:
 - `product`
 - `customer`
 
-Import schema dari:
+Import the schema from:
 
 ```text
 assets/databases/demo_delphirest.sql
@@ -430,19 +438,19 @@ assets/databases/demo_delphirest.sql
 
 ## Security Notes
 
-Sebelum production:
+Before production use:
 
-- Pindahkan credential database ke config/environment.
-- Ganti hardcoded token signature secret.
-- Review ulang password hashing.
+- Move database credentials to config/environment variables.
+- Replace hardcoded token signature secrets.
+- Review the password hashing strategy.
 - Review DataSnap demo authentication.
-- Jangan expose stack trace, SQL text, token, password, atau secret di response/log.
-- Jalankan API di balik HTTPS.
-- Batasi CORS sesuai domain aplikasi.
-- Pastikan MySQL user hanya punya permission yang diperlukan.
+- Do not expose stack traces, SQL text, tokens, passwords, or secrets in responses/logs.
+- Run the API behind HTTPS.
+- Restrict CORS to trusted application domains.
+- Give the MySQL user only the permissions it needs.
 
 ## License
 
-Project source code menggunakan license di file `LICENSE`.
+The project source code uses the license provided in `LICENSE`.
 
-Dependency pihak ketiga seperti MySQL/MariaDB client library mengikuti lisensi masing-masing vendor dan tidak disarankan untuk dicommit langsung ke repository ini.
+Third-party dependencies such as MySQL/MariaDB client libraries follow their vendor licenses and should not be committed directly into this repository.
