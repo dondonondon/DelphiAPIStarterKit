@@ -214,7 +214,7 @@ begin
       {$ELSE IF DEFINED (MSWINDOWS)}
       DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
       {$ENDIF}
-      DM.Con.Connected := True;
+//      DM.Con.Connected := True;
     except on E: Exception do
       Writeln(E.Message);
     end;
