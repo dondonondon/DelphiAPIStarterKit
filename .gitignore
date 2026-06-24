@@ -73,9 +73,8 @@
 # Local runtime configuration and secrets
 config.ini
 .env
-/bin/config.example.ini
+# /bin/config.example.ini
 
-# Local AI/editor assistant instructions
 /.github/
 /AGENTS.md
 /docs/ai/
