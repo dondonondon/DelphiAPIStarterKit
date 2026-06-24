@@ -80,6 +80,7 @@ config.ini
 /AGENTS.md
 /docs/ai/
 /docs/task/task.md
+/docs/task/*.md
 
 # Delphi history and backups
 __history/
@@ -105,4 +106,3 @@ sources/infrastructure/security/.gitkeep
 sources/infrastructure/logging/.gitkeep
 
 !libmysql.dll
-docs/task/task-finalization.md
