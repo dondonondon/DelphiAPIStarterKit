@@ -82,3 +82,4 @@ sources/infrastructure/logging/.gitkeep
 !/docs/databases/
 !/docs/information/
 !/docs/api/
+!/docs/api/
