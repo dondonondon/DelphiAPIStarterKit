@@ -38,13 +38,11 @@ __recovery/
 # Castalia statistics (since XE7)
 *.stat
 
-<<<<<<< HEAD
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
 /bin/proxy
 /bin/proxy
 sources/infrastructure/external/.gitkeep
-=======
 # Local runtime configuration and secrets
 config.ini
 .env
@@ -84,4 +82,3 @@ sources/infrastructure/logging/.gitkeep
 !/docs/databases/
 !/docs/information/
 !/docs/api/
->>>>>>> e0cb4c4a28c52b7bf48cccf90e7d30eee36d4308
