@@ -23,6 +23,7 @@ type
     class function GetStorageBaseDirectory: string;
     class procedure EnsureDirectory(const APath: string);
     class function BuildStoragePath(const ASubDirectory, AFileName: string): string;
+    class function GetHMACSignatureSecret: string;
   public
     class procedure CreateBaseDirectory;
     class function GetBaseDirectory : String;
@@ -56,8 +57,10 @@ type
   end;
 
 const
-  SIGNATUREAPPS = 'blangkonfa2025inventory';
   CTYNTCODE = 7269;
+  HMAC_SECRET_ENV_NAME = 'DELPHI_API_HMAC_SECRET';
+  HMAC_SECRET_SECTION = 'Security';
+  HMAC_SECRET_NAME = 'HMACSecret';
 
 implementation
 
@@ -237,7 +240,31 @@ end;
 
 class function TGlobalFunction.HashHMAC256(AText: String): String;
 begin
-  Result := THashSHA2.GetHMAC(AText, SIGNATUREAPPS, SHA256);
+  Result := THashSHA2.GetHMAC(AText, GetHMACSignatureSecret, SHA256);
+end;
+
+class function TGlobalFunction.GetHMACSignatureSecret: string;
+var
+  LConfigFileName: string;
+  LIni: TIniFile;
+begin
+  Result := Trim(GetEnvironmentVariable(HMAC_SECRET_ENV_NAME));
+  if Result <> '' then
+    Exit;
+
+  LConfigFileName := TPath.Combine(GetBaseDirectory, 'config.ini');
+  if FileExists(LConfigFileName) then begin
+    LIni := TIniFile.Create(LConfigFileName);
+    try
+      Result := Trim(LIni.ReadString(HMAC_SECRET_SECTION, HMAC_SECRET_NAME, ''));
+    finally
+      FreeAndNil(LIni);
+    end;
+  end;
+
+  if Result = '' then
+    raise Exception.CreateFmt('%s environment variable or [%s] %s in config.ini is required.',
+      [HMAC_SECRET_ENV_NAME, HMAC_SECRET_SECTION, HMAC_SECRET_NAME]);
 end;
 
 class function TGlobalFunction.LoadFile(AFileName: String): String;

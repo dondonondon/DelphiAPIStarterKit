@@ -169,7 +169,13 @@
                     "name": "Get All Users",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/User",
                             "host": [
@@ -201,7 +207,13 @@
                     "name": "Get User by ID",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/User/{{user_id}}",
                             "host": [
@@ -250,6 +262,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -303,6 +320,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -353,7 +375,13 @@
                     "name": "Delete User",
                     "request": {
                         "method": "DELETE",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/User/{{user_id}}",
                             "host": [
@@ -405,7 +433,8 @@
                             },
                             {
                                 "key": "x-api-token",
-                                "value": "{{access_token}}"
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -463,12 +492,13 @@
                             },
                             {
                                 "key": "x-api-token",
-                                "value": "{{access_token}}"
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"force_default\": \"true\"\n}"
+                            "raw": "{\n  \"confirm_reset\": \"true\"\n}"
                         },
                         "url": {
                             "raw": "{{base_url}}api/v1/User/{{user_id}}/ResetPassword",
@@ -495,7 +525,7 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n  \"status\": 200,\n  \"messages\": \"Password reset to default\",\n  \"servertime\": \"1780962999\",\n  \"data\": [\n    {\n      \"user_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"reset_by\": \"660e8400-e29b-41d4-a716-446655440001\",\n      \"force_default\": \"true\"\n    }\n  ]\n}"
+                            "body": "{\n  \"status\": 200,\n  \"messages\": \"Password reset\",\n  \"servertime\": \"1780962999\",\n  \"data\": [\n    {\n      \"user_id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"reset_by\": \"660e8400-e29b-41d4-a716-446655440001\",\n      \"temporary_password\": \"d78a0c18d8f64c6aa64f4d28\"\n    }\n  ]\n}"
                         },
                         {
                             "name": "401 Unauthorized",
@@ -520,7 +550,13 @@
                     "name": "Get All Products",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Product",
                             "host": [
@@ -552,7 +588,13 @@
                     "name": "Get Product by ID",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Product/{{product_id}}",
                             "host": [
@@ -601,6 +643,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -654,6 +701,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -704,7 +756,13 @@
                     "name": "Delete Product",
                     "request": {
                         "method": "DELETE",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Product/{{product_id}}",
                             "host": [
@@ -754,7 +812,13 @@
                     "name": "Get All Categories",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Category",
                             "host": [
@@ -786,7 +850,13 @@
                     "name": "Get Category by ID",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Category/{{category_id}}",
                             "host": [
@@ -835,6 +905,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -888,6 +963,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -938,7 +1018,13 @@
                     "name": "Delete Category",
                     "request": {
                         "method": "DELETE",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Category/{{category_id}}",
                             "host": [
@@ -988,7 +1074,13 @@
                     "name": "Get All Customers",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Customer",
                             "host": [
@@ -1020,7 +1112,13 @@
                     "name": "Get Customer by ID",
                     "request": {
                         "method": "GET",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Customer/{{customer_id}}",
                             "host": [
@@ -1069,6 +1167,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -1122,6 +1225,11 @@
                             {
                                 "key": "Content-Type",
                                 "value": "application/json"
+                            },
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
                             }
                         ],
                         "body": {
@@ -1172,7 +1280,13 @@
                     "name": "Delete Customer",
                     "request": {
                         "method": "DELETE",
-                        "header": [],
+                        "header": [
+                            {
+                                "key": "x-api-token",
+                                "value": "{{access_token}}",
+                                "type": "text"
+                            }
+                        ],
                         "url": {
                             "raw": "{{base_url}}api/v1/Customer/{{customer_id}}",
                             "host": [

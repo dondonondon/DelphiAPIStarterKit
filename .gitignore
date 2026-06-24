@@ -70,6 +70,17 @@
 *.dsk
 *.dsv
 
+# Local runtime configuration and secrets
+config.ini
+.env
+/bin/config.example.ini
+
+# Local AI/editor assistant instructions
+/.github/
+/AGENTS.md
+/docs/ai/
+/docs/task/task.md
+
 # Delphi history and backups
 __history/
 __recovery/
@@ -80,15 +91,11 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 /modules/
-/.github
-AGENTS.md
-/bin/proxy
-/docs/*
-!/docs/api/
-/docs/api/*
-!/docs/api/postman.collection.json
-/proxy
-/temp-file
+/bin/proxy/
+/bin/files/
+/bin/lib/*.dll
+/proxy/
+/temp-file/
 sources/shared/types/.gitkeep
 sources/shared/middleware/.gitkeep
 sources/tests/integration/.gitkeep
@@ -98,3 +105,4 @@ sources/infrastructure/security/.gitkeep
 sources/infrastructure/logging/.gitkeep
 
 !libmysql.dll
+docs/task/task-finalization.md

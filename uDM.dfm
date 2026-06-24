@@ -11,7 +11,6 @@ object DM: TDM
     Top = 40
   end
   object FDPhysMySQLDriverLink: TFDPhysMySQLDriverLink
-    VendorHome = 'D:\Documentation\DatasnapLinux\Win64\Release\'
     Left = 232
     Top = 184
   end

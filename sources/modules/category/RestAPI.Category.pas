@@ -52,7 +52,9 @@ begin
       end;
     end,
     AStatusCode,
-    'Category route error'
+    'Category route error',
+    AConnection,
+    True
   );
 end;
 

@@ -30,12 +30,13 @@ This project is intended as a reusable foundation for Delphi backend APIs. It is
 
 ## Requirements
 
-- Delphi with WebBroker, DataSnap, FireDAC, and the FireDAC MySQL driver.
+- Delphi with WebBroker, FireDAC, FireDAC MySQL driver, and the standard Indy/WebBroker bridge units.
+- IPPeer runtime units if your Delphi installation separates these dependencies.
 - MySQL or MariaDB server.
 - MySQL/MariaDB native client library matching the application target architecture.
 - Windows for the default `Win32` build target.
 
-The current `compile.bat` uses a local Delphi installation path. Update the `rsvars.bat` path if your Delphi version is different.
+The default build script targets `Debug | Win32`. Use environment variables to change the Delphi environment script, build configuration, or platform.
 
 ## Project Structure
 
@@ -77,29 +78,31 @@ For error responses, `status` follows the HTTP status code and `data` is returne
 
 ## Database Setup
 
-The default database name in the current source code is:
+The database connection is not stored in source code. Configure it before running the server.
 
-```text
-demo_delphirest
+Preferred option: set environment variables:
+
+```bat
+setx DELPHI_API_DB_SERVER "localhost"
+setx DELPHI_API_DB_DATABASE "demo_delphirest"
+setx DELPHI_API_DB_USER "root"
+setx DELPHI_API_DB_PASSWORD ""
 ```
 
-The default connection is configured in:
+Alternative option: create `config.ini` in the application base directory:
 
-```text
-sources/infrastructure/database/DB.ConnectionFactory.pas
+```ini
+[Database]
+Server=localhost
+Database=demo_delphirest
+User_Name=root
+Password=
+CharacterSet=utf8mb4
+POOL_MaximumItems=50
+POOL_ExpireTimeout=300000
 ```
 
-Current local defaults:
-
-```text
-Server    = localhost
-Database  = demo_delphirest
-User_Name = root
-Password  =
-Driver    = MySQL
-```
-
-For production or public deployment, move these values to a config file or environment variables.
+Use `config.example.ini` as the template. Do not commit your real `config.ini`.
 
 ### Import Schema via MySQL CLI
 
@@ -129,6 +132,38 @@ cmd /c "mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql"
 4. Open the `Import` tab.
 5. Select `assets/databases/demo_delphirest.sql`.
 6. Run the import.
+
+### MySQL Compatibility Notes
+
+- The sample schema targets MySQL/MariaDB with InnoDB and `utf8mb4`.
+- During setup, the database account needs permission to create/import tables.
+- At runtime, use a dedicated application account with only the required CRUD permissions for the application database.
+- The schema file creates tables only. If you need test login data, insert a demo role and user that match your configured `DELPHI_API_HMAC_SECRET`.
+
+## Application Secret Setup
+
+The HMAC signature secret is not stored in source code. Configure it before using login, password hashing, token creation, or token validation.
+
+Preferred option: set an environment variable:
+
+```bat
+setx DELPHI_API_HMAC_SECRET "replace-with-a-long-random-secret"
+```
+
+For the current terminal session only:
+
+```bat
+set DELPHI_API_HMAC_SECRET=replace-with-a-long-random-secret
+```
+
+Alternative option: create `config.ini` in the application base directory:
+
+```ini
+[Security]
+HMACSecret=replace-with-a-long-random-secret
+```
+
+Use `config.example.ini` as the template. Do not commit your real `config.ini`.
 
 ## MySQL Client Library
 
@@ -181,13 +216,23 @@ compile.bat
 The script:
 
 - Stops `DelphiAPIStarterKit.exe` if it is already running.
-- Calls `rsvars.bat`.
+- Calls `rsvars.bat` from `DELPHI_RSVARS`, or from `%BDS%\bin\rsvars.bat` when running inside a Delphi command prompt.
 - Builds the project via MSBuild.
+- Defaults to `Debug | Win32`.
 
-If Delphi is installed in a different path or version, update this path:
+When running from a normal terminal, set `DELPHI_RSVARS` first:
 
 ```bat
-C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
+set DELPHI_RSVARS=C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
+compile.bat
+```
+
+Optional build overrides:
+
+```bat
+set BUILD_CONFIG=Release
+set BUILD_PLATFORM=Win64
+compile.bat
 ```
 
 Manual build:
@@ -204,6 +249,44 @@ After building, run the executable from the output folder. Make sure:
 - The `demo_delphirest` database exists and the schema has been imported.
 - The MySQL client DLL is available to FireDAC.
 - The server port is not already used by another application.
+
+Default local base URL:
+
+```text
+http://localhost:9381
+```
+
+## API Quickstart
+
+Import the Postman collection:
+
+```text
+docs/api/postman.collection.json
+```
+
+Set the collection variable:
+
+```text
+base_url = http://localhost:9381/
+```
+
+Login request example:
+
+```bat
+curl -X POST http://localhost:9381/api/v1/Auth/Login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\":\"demo_admin\",\"password\":\"demo_admin\",\"device_id\":\"local-dev\",\"device_name\":\"CLI\"}"
+```
+
+The database schema does not insert a default demo user. Create your own local test user before expecting the login example to succeed.
+
+All endpoints under `User`, `Product`, `Category`, and `Customer` require an access token from the login response. Pass the token via the `x-api-token` header:
+
+```text
+x-api-token: <access_token>
+```
+
+The server also accepts `access-token` and `Authorization: Bearer <token>` as fallback header names.
 
 ## API Route Pattern
 
@@ -441,9 +524,8 @@ assets/databases/demo_delphirest.sql
 Before production use:
 
 - Move database credentials to config/environment variables.
-- Replace hardcoded token signature secrets.
-- Review the password hashing strategy.
-- Review DataSnap demo authentication.
+- Configure `DELPHI_API_HMAC_SECRET` or `[Security] HMACSecret` in `config.ini`.
+- Review the password hashing strategy. The starter currently uses HMAC-SHA256 with an application secret for simplicity; production systems should use a password hashing algorithm such as bcrypt, Argon2, or PBKDF2 with per-user salts and an appropriate work factor.
 - Do not expose stack traces, SQL text, tokens, passwords, or secrets in responses/logs.
 - Run the API behind HTTPS.
 - Restrict CORS to trusted application domains.
@@ -454,3 +536,15 @@ Before production use:
 The project source code uses the license provided in `LICENSE`.
 
 Third-party dependencies such as MySQL/MariaDB client libraries follow their vendor licenses and should not be committed directly into this repository.
+
+## Contributing
+
+See `CONTRIBUTING.md` for development setup, coding standards, build validation, and documentation expectations.
+
+## Security Policy
+
+See `SECURITY.md` for vulnerability reporting and security review guidance.
+
+## Changelog
+
+See `CHANGELOG.md` for unreleased changes and release notes.

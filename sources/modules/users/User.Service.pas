@@ -19,6 +19,7 @@ type
     FWebRequest: TWebRequest;
 
     function GetAuthenticatedUserID(out AUserID: string): Boolean;
+    function GenerateTemporaryPassword: string;
     function InternalServerError: string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
@@ -48,9 +49,6 @@ uses
   BFA.Security.Token,
   User.DTO,
   User.Validator;
-
-const
-  DEFAULT_PASSWORD = 'inventorywikanindya';
 
 { TUserService }
 
@@ -219,6 +217,11 @@ begin
   end;
 end;
 
+function TUserService.GenerateTemporaryPassword: string;
+begin
+  Result := Copy(TGlobalFunction.NewUUIDCompact + TGlobalFunction.NewUUIDCompact, 1, 24);
+end;
+
 function TUserService.Insert: string;
 var
   LRequest: TUserCreateRequest;
@@ -291,6 +294,7 @@ var
   LRequesterID: string;
   LDataset: TFDQuery;
   LResponseData: TStringList;
+  LTemporaryPassword: string;
 begin
   if not TUserValidator.ValidateResetPassword(FData, FParts, LRequest, LMessage) then begin
     FStatusCode := 400;
@@ -312,12 +316,14 @@ begin
     FreeAndNil(LDataset);
   end;
 
+  LTemporaryPassword := GenerateTemporaryPassword;
+
   try
     FConnection.StartTransaction;
     try
       FRepository.UpdatePassword(
         LRequest.TargetUserID,
-        TGlobalFunction.HashHMAC256(DEFAULT_PASSWORD)
+        TGlobalFunction.HashHMAC256(LTemporaryPassword)
       );
       FConnection.Commit;
     except
@@ -329,11 +335,12 @@ begin
 
     LResponseData := TUserDTO.CreateResetPasswordResponse(
       LRequest.TargetUserID,
-      LRequesterID
+      LRequesterID,
+      LTemporaryPassword
     );
     try
       FStatusCode := 200;
-      Result := THelperResponse.CreateResponse(FStatusCode, 'Password reset to default',
+      Result := THelperResponse.CreateResponse(FStatusCode, 'Password reset',
         LResponseData);
     finally
       FreeAndNil(LResponseData);

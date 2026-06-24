@@ -22,12 +22,13 @@ Project ini ditujukan sebagai fondasi awal API backend Delphi, bukan template pr
 
 ## Requirements
 
-- Delphi dengan WebBroker, DataSnap, FireDAC, dan FireDAC MySQL driver.
+- Delphi dengan WebBroker, FireDAC, FireDAC MySQL driver, dan unit standar Indy/WebBroker bridge.
+- IPPeer runtime units jika instalasi Delphi Anda memisahkan dependency tersebut.
 - MySQL atau MariaDB server.
 - MySQL/MariaDB native client library sesuai target aplikasi.
 - Windows untuk build default `Win32`.
 
-Project saat ini memakai Delphi path lokal di `compile.bat`. Sesuaikan path `rsvars.bat` jika versi Delphi berbeda.
+Build script default memakai target `Debug | Win32`. Gunakan environment variable untuk mengganti Delphi environment script, build configuration, atau platform.
 
 ## Project Structure
 
@@ -69,29 +70,31 @@ Untuk error response, `status` mengikuti HTTP status code dan `data` dikembalika
 
 ## Database Setup
 
-Default database name di source saat ini:
+Database connection tidak disimpan di source code. Konfigurasikan sebelum menjalankan server.
 
-```text
-demo_delphirest
+Opsi utama: set environment variables:
+
+```bat
+setx DELPHI_API_DB_SERVER "localhost"
+setx DELPHI_API_DB_DATABASE "demo_delphirest"
+setx DELPHI_API_DB_USER "root"
+setx DELPHI_API_DB_PASSWORD ""
 ```
 
-Connection default ada di:
+Opsi alternatif: buat `config.ini` di application base directory:
 
-```text
-sources/infrastructure/database/DB.ConnectionFactory.pas
+```ini
+[Database]
+Server=localhost
+Database=demo_delphirest
+User_Name=root
+Password=
+CharacterSet=utf8mb4
+POOL_MaximumItems=50
+POOL_ExpireTimeout=300000
 ```
 
-Default local configuration saat ini:
-
-```text
-Server    = localhost
-Database  = demo_delphirest
-User_Name = root
-Password  =
-Driver    = MySQL
-```
-
-Untuk production atau public deployment, pindahkan konfigurasi ini ke file config atau environment variable.
+Gunakan `config.example.ini` sebagai template. Jangan commit `config.ini` asli.
 
 ### Import Schema via MySQL CLI
 
@@ -121,6 +124,38 @@ cmd /c "mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql"
 4. Buka tab `Import`.
 5. Pilih file `assets/databases/demo_delphirest.sql`.
 6. Jalankan import.
+
+### Catatan Kompatibilitas MySQL
+
+- Sample schema ditujukan untuk MySQL/MariaDB dengan InnoDB dan `utf8mb4`.
+- Saat setup, database account butuh permission untuk membuat/import table.
+- Saat runtime, gunakan application account khusus dengan permission CRUD seperlunya untuk database aplikasi.
+- File schema hanya membuat table. Jika butuh data login test, insert role dan user demo sendiri sesuai `DELPHI_API_HMAC_SECRET` yang dikonfigurasi.
+
+## Setup Application Secret
+
+HMAC signature secret tidak disimpan di source code. Konfigurasikan secret ini sebelum memakai login, password hashing, pembuatan token, atau validasi token.
+
+Opsi utama: set environment variable:
+
+```bat
+setx DELPHI_API_HMAC_SECRET "ganti-dengan-secret-panjang-random"
+```
+
+Untuk terminal session saat ini saja:
+
+```bat
+set DELPHI_API_HMAC_SECRET=ganti-dengan-secret-panjang-random
+```
+
+Opsi alternatif: buat `config.ini` di application base directory:
+
+```ini
+[Security]
+HMACSecret=ganti-dengan-secret-panjang-random
+```
+
+Gunakan `config.example.ini` sebagai template. Jangan commit `config.ini` asli yang berisi secret.
 
 ## MySQL Client Library
 
@@ -173,13 +208,23 @@ compile.bat
 Script ini:
 
 - Menghentikan proses `DelphiAPIStarterKit.exe` jika sedang berjalan.
-- Memanggil `rsvars.bat`.
+- Memanggil `rsvars.bat` dari `DELPHI_RSVARS`, atau dari `%BDS%\bin\rsvars.bat` jika dijalankan dari Delphi command prompt.
 - Build project via MSBuild.
+- Default target `Debug | Win32`.
 
-Jika Delphi terinstall di path atau versi berbeda, ubah path ini:
+Jika menjalankan dari terminal biasa, set `DELPHI_RSVARS` lebih dulu:
 
 ```bat
-C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
+set DELPHI_RSVARS=C:\Program Files (x86)\Embarcadero\Studio\37.0\bin\rsvars.bat
+compile.bat
+```
+
+Override build optional:
+
+```bat
+set BUILD_CONFIG=Release
+set BUILD_PLATFORM=Win64
+compile.bat
 ```
 
 Build manual:
@@ -196,6 +241,44 @@ Setelah build, jalankan executable dari output folder. Pastikan:
 - Database `demo_delphirest` sudah dibuat dan schema sudah diimport.
 - MySQL client DLL tersedia untuk FireDAC.
 - Port server tidak sedang dipakai aplikasi lain.
+
+Default local base URL:
+
+```text
+http://localhost:9381
+```
+
+## API Quickstart
+
+Import Postman collection:
+
+```text
+docs/api/postman.collection.json
+```
+
+Set collection variable:
+
+```text
+base_url = http://localhost:9381/
+```
+
+Contoh request login:
+
+```bat
+curl -X POST http://localhost:9381/api/v1/Auth/Login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"username\":\"demo_admin\",\"password\":\"demo_admin\",\"device_id\":\"local-dev\",\"device_name\":\"CLI\"}"
+```
+
+Database schema tidak membuat default demo user. Buat user test lokal sendiri sebelum mengharapkan contoh login berhasil.
+
+Semua endpoint di bawah `User`, `Product`, `Category`, dan `Customer` membutuhkan access token dari response login. Kirim token melalui header `x-api-token`:
+
+```text
+x-api-token: <access_token>
+```
+
+Server juga menerima `access-token` dan `Authorization: Bearer <token>` sebagai header fallback.
 
 ## API Route Pattern
 
@@ -433,9 +516,8 @@ assets/databases/demo_delphirest.sql
 Sebelum production:
 
 - Pindahkan credential database ke config/environment.
-- Ganti hardcoded token signature secret.
-- Review ulang password hashing.
-- Review DataSnap demo authentication.
+- Konfigurasikan `DELPHI_API_HMAC_SECRET` atau `[Security] HMACSecret` di `config.ini`.
+- Review ulang password hashing. Starter ini masih memakai HMAC-SHA256 dengan application secret agar contoh tetap sederhana; production system sebaiknya memakai bcrypt, Argon2, atau PBKDF2 dengan per-user salt dan work factor yang sesuai.
 - Jangan expose stack trace, SQL text, token, password, atau secret di response/log.
 - Jalankan API di balik HTTPS.
 - Batasi CORS sesuai domain aplikasi.
@@ -446,3 +528,15 @@ Sebelum production:
 Project source code menggunakan license di file `LICENSE`.
 
 Dependency pihak ketiga seperti MySQL/MariaDB client library mengikuti lisensi masing-masing vendor dan tidak disarankan untuk dicommit langsung ke repository ini.
+
+## Contributing
+
+Lihat `CONTRIBUTING.md` untuk development setup, coding standards, build validation, dan aturan update dokumentasi.
+
+## Security Policy
+
+Lihat `SECURITY.md` untuk proses pelaporan vulnerability dan panduan security review.
+
+## Changelog
+
+Lihat `CHANGELOG.md` untuk unreleased changes dan release notes.
