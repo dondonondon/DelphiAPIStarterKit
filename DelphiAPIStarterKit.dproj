@@ -213,10 +213,6 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="sources\app\App.Server.pas">
-            <Form>ServerContainer1</Form>
-            <DesignClass>TDataModule</DesignClass>
-        </DCCReference>
         <DCCReference Include="sources\app\App.WebModule.pas">
             <Form>WM</Form>
             <DesignClass>TWebModule</DesignClass>
@@ -239,7 +235,6 @@ $(PreBuildEvent)]]></PreBuildEvent>
         <DCCReference Include="sources\core\BFA.Core.Rest.pas"/>
         <DCCReference Include="sources\core\BFA.Core.Endpoint.pas"/>
         <DCCReference Include="sources\core\BFA.Core.Config.pas"/>
-        <DCCReference Include="sources\legacy\datasnap\methods\Methods.Sample.pas"/>
         <DCCReference Include="sources\modules\users\RestAPI.User.pas"/>
         <DCCReference Include="sources\infrastructure\database\DB.ConnectionFactory.pas"/>
         <DCCReference Include="sources\infrastructure\database\DB.Helper.Query.pas"/>
