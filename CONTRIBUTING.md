@@ -58,8 +58,7 @@ Update these files when relevant:
 - `README.id.md`
 - `docs/api/*.md`
 - `docs/api/postman.collection.json`
-- `docs/ai/PROJECT_MAP.md`
-- `docs/ai/UNIT_MAP.md`
+- `docs/information/*.md`
 - `docs/task/task-finalization.md`
 
 ## Security
