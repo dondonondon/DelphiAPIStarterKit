@@ -9,8 +9,6 @@ uses
   IdHTTPWebBrokerBridge,
   Web.WebReq,
   Web.WebBroker,
-  Datasnap.DSSession,
-  App.Server in 'sources\app\App.Server.pas' {ServerContainer1: TDataModule},
   App.WebModule in 'sources\app\App.WebModule.pas' {WM: TWebModule},
   BFA.Core.Constants in 'sources\core\BFA.Core.Constants.pas',
   BFA.Helper.Strings in 'sources\shared\helpers\BFA.Helper.Strings.pas',
@@ -26,7 +24,6 @@ uses
   BFA.Core.Rest in 'sources\core\BFA.Core.Rest.pas',
   BFA.Core.Endpoint in 'sources\core\BFA.Core.Endpoint.pas',
   BFA.Core.Config in 'sources\core\BFA.Core.Config.pas',
-  Methods.Sample in 'sources\legacy\datasnap\methods\Methods.Sample.pas',
   RestAPI.User in 'sources\modules\users\RestAPI.User.pas',
   DB.ConnectionFactory in 'sources\infrastructure\database\DB.ConnectionFactory.pas',
   DB.Helper.Query in 'sources\infrastructure\database\DB.Helper.Query.pas',
@@ -60,8 +57,6 @@ uses
 
 procedure TerminateThreads;
 begin
-  if TDSSessionManager.Instance <> nil then
-    TDSSessionManager.Instance.TerminateAllSessions;
 end;
 
 function BindPort(APort: Integer): Boolean;

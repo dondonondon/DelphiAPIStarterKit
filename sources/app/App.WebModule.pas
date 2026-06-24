@@ -3,23 +3,13 @@
 interface
 
 uses
-  System.SysUtils, System.Classes, System.StrUtils, Web.HTTPApp, Datasnap.DSHTTPCommon,
-  Datasnap.DSHTTPWebBroker, Datasnap.DSServer,
-  Web.WebFileDispatcher, Web.HTTPProd,
-  DataSnap.DSAuth,
-  Datasnap.DSProxyJavaScript, IPPeerServer, Datasnap.DSMetadata,
-  Datasnap.DSServerMetadata, Datasnap.DSClientMetadata, Datasnap.DSCommonServer,
-  Datasnap.DSHTTP, FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param,
+  System.SysUtils, System.Classes, System.StrUtils, Web.HTTPApp,
+  FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param,
   FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,
-  Data.DB, FireDAC.Comp.DataSet, FireDAC.Comp.Client, Datasnap.DSProxyDispatcher, Web.ReqMulti,
-  DbxSocketChannelNative, DbxCompressionFilter;
+  Data.DB, FireDAC.Comp.DataSet, FireDAC.Comp.Client;
 
 type
   TWM = class(TWebModule)
-    DSHTTPWebDispatcher1: TDSHTTPWebDispatcher;
-    DSProxyGenerator1: TDSProxyGenerator;
-    DSServerMetaDataProvider1: TDSServerMetaDataProvider;
-    DSProxyDispatcher1: TDSProxyDispatcher;
     procedure WebModule1DefaultHandlerAction(Sender: TObject;
       Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
     procedure WMHelloWorldAction(Sender: TObject; Request: TWebRequest;
@@ -49,8 +39,8 @@ implementation
 
 {$R *.dfm}
 
-uses App.Server, Web.WebReq, BFA.Core.Rest, uDM,
-  BFA.Helper.Strings, BFA.Core.Config, BFA.Core.Request, Methods.Sample,
+uses Web.WebReq, BFA.Core.Rest, uDM,
+  BFA.Helper.Strings, BFA.Core.Config, BFA.Core.Request,
   DB.ConnectionFactory;
 
 //function TWM.AllowServerFunctionInvoker: Boolean;
@@ -107,15 +97,6 @@ end;
 
 procedure TWM.WebModuleCreate(Sender: TObject);
 begin
-//  FServerFunctionInvokerAction := ActionByName('ServerFunctionInvokerAction');
-  DSServerMetaDataProvider1.Server := DSServer;
-  DSHTTPWebDispatcher1.Server := DSServer;
-  if DSServer.Started then
-  begin
-    DSHTTPWebDispatcher1.DbxContext := DSServer.DbxContext;
-    DSHTTPWebDispatcher1.Start;
-  end;
-  DSHTTPWebDispatcher1.AuthenticationManager := DSAuthenticationManager;
 end;
 
 procedure TWM.WMapiAction(Sender: TObject; Request: TWebRequest;
