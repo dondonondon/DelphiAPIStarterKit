@@ -2,19 +2,21 @@
 
 ![Delphi](https://img.shields.io/badge/Delphi-12.x%20WebBroker-E62431?style=flat-square&logo=embarcadero&logoColor=white)
 ![Database](https://img.shields.io/badge/Database-MySQL%20%7C%20MariaDB-4479A1?style=flat-square&logo=mysql&logoColor=white)
+![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux64-1F6FEB?style=flat-square)
 ![Architecture](https://img.shields.io/badge/Architecture-Controller%20%2B%20Service%20%2B%20Repository-0E8A16?style=flat-square)
 ![Status](https://img.shields.io/badge/Status-Starter%20Template-F59E0B?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
 
 English | [Bahasa Indonesia](README.id.md)
 
-`DelphiAPIStarterKit` is a Delphi WebBroker starter template for building REST APIs and web services with a clean backend structure: routing, response helpers, request validation, service layer, repository layer, FireDAC connection factory, and practical CRUD modules.
+`DelphiAPIStarterKit` is a Delphi WebBroker starter template for building REST APIs and web services with a clean backend structure: RTTI-based routing, response helpers, request validation, service layer, repository layer, FireDAC connection factory, and practical CRUD modules.
 
 This project is intended as a reusable foundation for Delphi backend APIs. It is not a production-ready deployment template without additional configuration and security review.
 
 ## Features
 
 - Delphi WebBroker API server.
+- RTTI-based route dispatch from URL resources to registered endpoint classes.
 - FireDAC database access for MySQL/MariaDB.
 - Module structure based on `RestAPI`, `Service`, `Repository`, `Validator`, and `DTO` units.
 - Standard JSON response envelope.
@@ -35,6 +37,7 @@ This project is intended as a reusable foundation for Delphi backend APIs. It is
 - MySQL or MariaDB server.
 - MySQL/MariaDB native client library matching the application target architecture.
 - Windows for the default `Win32` build target.
+- Linux64 is enabled in the Delphi project and requires the Delphi Linux toolchain/PAServer setup.
 
 The default build script targets `Debug | Win32`. Use environment variables to change the Delphi environment script, build configuration, or platform.
 
@@ -171,6 +174,7 @@ FireDAC MySQL requires a native client library that matches the application bitn
 
 - A `Win32` application requires a 32-bit client library.
 - A `Win64` application requires a 64-bit client library.
+- A `Linux64` deployment requires a compatible 64-bit `libmysqlclient.so` or `libmariadb.so` available on the Linux server.
 
 Do not download `libmysql.dll` from unofficial DLL mirrors. Use one of these official sources:
 
@@ -205,6 +209,18 @@ This means the application looks for the native client library from the current 
 
 For an open-source repository, the recommended approach is not to commit `libmysql.dll` or binary ZIP files. Document the dependency and let users install the client library from the official vendor package.
 
+### Linux Client Library Notes
+
+For Linux64 deployment, install the MySQL/MariaDB client library on the target server using the server distribution package manager or the official vendor package.
+
+The current Linux startup code sets:
+
+```pascal
+DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
+```
+
+If your Linux server stores the client library in a different location, adjust `VendorHome` in `DelphiAPIStarterKit.dpr` or adapt the startup code to read this path from deployment configuration.
+
 ## Build
 
 Default build script:
@@ -234,6 +250,16 @@ set BUILD_CONFIG=Release
 set BUILD_PLATFORM=Win64
 compile.bat
 ```
+
+Linux64 build example:
+
+```bat
+set BUILD_CONFIG=Release
+set BUILD_PLATFORM=Linux64
+compile.bat
+```
+
+Linux builds require a configured Delphi Linux toolchain and PAServer connection.
 
 Manual build:
 
@@ -311,7 +337,8 @@ GET    /api/v1/products
 GET    /api/v1/customers
 ```
 
-Routes are resolved to classes using this pattern:
+Routes are resolved to registered endpoint classes using a lightweight RTTI-based dispatcher.
+The dispatcher builds the target class name from the API version and resource name:
 
 ```text
 TRestClass{APIVersion}{RequestClass}
@@ -323,7 +350,7 @@ Example:
 /api/v1/users -> TRestClassV1User
 ```
 
-The request then enters the class `Route` method and is mapped to a service action.
+Internally, the core dispatcher uses `FindClass` to locate the registered endpoint class, creates an instance, and invokes its `Route` method. The endpoint `Route` method then maps the HTTP method and path to the proper service action.
 
 ## Adding a New Endpoint
 
@@ -450,7 +477,7 @@ Add the new unit to the `uses` clause in:
 sources/core/BFA.Core.Rest.pas
 ```
 
-Then register the class in `RegisterClassAPI`:
+Then register the class in `RegisterClassAPI`. This step is required because the RTTI dispatcher resolves endpoint classes through Delphi's class registry:
 
 ```pascal
 RegisterClassAPI([TRestClassV1User, TRestClassV1Auth, TRestClassV1Product,
