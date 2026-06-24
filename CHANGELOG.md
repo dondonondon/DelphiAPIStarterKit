@@ -11,7 +11,6 @@ All notable changes to this project will be documented in this file.
 - `config.example.ini` for application secret and database settings.
 - Open-source contribution and security policy documents.
 - API documentation and Postman collection publishing path.
-- Project navigation maps under `docs/ai`.
 
 ### Changed
 
