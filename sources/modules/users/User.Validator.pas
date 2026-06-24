@@ -92,26 +92,26 @@ class function TUserValidator.ValidateResetPassword(AData: TFDMemTable;
   const AParts: TArray<string>; out ARequest: TUserResetPasswordRequest;
   out AMessage: string): Boolean;
 var
-  LForceText: string;
+  LConfirmText: string;
 begin
   Result := False;
   ARequest.TargetUserID := '';
-  ARequest.ForceDefault := False;
+  ARequest.ConfirmReset := False;
 
   if not THelperValidator.ExtractRouteUserID(AParts, ARequest.TargetUserID, AMessage) then
     Exit;
 
-  if not THelperValidator.GetRequiredString(AData, 'force_default', 'force_default required',
-    LForceText, AMessage) then
+  if not THelperValidator.GetRequiredString(AData, 'confirm_reset', 'confirm_reset required',
+    LConfirmText, AMessage) then
     Exit;
 
-  if not THelperValidator.ParseBoolText(LForceText, ARequest.ForceDefault) then begin
-    AMessage := 'force_default must be true';
+  if not THelperValidator.ParseBoolText(LConfirmText, ARequest.ConfirmReset) then begin
+    AMessage := 'confirm_reset must be true';
     Exit;
   end;
 
-  if not ARequest.ForceDefault then begin
-    AMessage := 'force_default must be true';
+  if not ARequest.ConfirmReset then begin
+    AMessage := 'confirm_reset must be true';
     Exit;
   end;
 

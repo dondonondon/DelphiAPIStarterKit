@@ -52,7 +52,9 @@ begin
       end;
     end,
     AStatusCode,
-    'Product route error'
+    'Product route error',
+    AConnection,
+    True
   );
 end;
 

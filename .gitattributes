@@ -1,0 +1,19 @@
+* text=auto
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.dpr text
+*.pas text
+*.dfm text
+*.dproj text
+*.sql text eol=lf
+*.md text
+*.json text eol=lf
+
+*.res binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.dll binary

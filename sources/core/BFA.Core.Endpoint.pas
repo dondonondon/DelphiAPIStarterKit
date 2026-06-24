@@ -12,11 +12,14 @@ type
     const AParts: TArray<string>; out AStatusCode: Integer): string;
 
   THelperEndpoint = class
+  private
+    class function IsAuthenticated(AConnection: TFDConnection; ARequest: TWebRequest): Boolean; static;
   public
     class function ExecuteRoute(AData: TFDMemTable; ARequest: TWebRequest;
       AServiceClass: TClass; const APostOnlyActions: array of string;
       const AExecuteAction: TEndpointExecuteAction; out AStatusCode: Integer;
-      const ALogSource: string = 'Endpoint route error'): string; static;
+      const ALogSource: string = 'Endpoint route error';
+      AConnection: TFDConnection = nil; ARequireAuthentication: Boolean = False): string; static;
     class procedure WriteErrorLog(const ASource: string; AException: Exception); static;
   end;
 
@@ -24,13 +27,18 @@ implementation
 
 uses
   System.IOUtils,
+  Data.DB,
   BFA.Core.Helper,
-  BFA.Core.Response;
+  BFA.Core.Response,
+  BFA.Helper.Strings,
+  BFA.Security.Token,
+  DB.Helper.Query;
 
 class function THelperEndpoint.ExecuteRoute(AData: TFDMemTable; ARequest: TWebRequest;
   AServiceClass: TClass; const APostOnlyActions: array of string;
   const AExecuteAction: TEndpointExecuteAction; out AStatusCode: Integer;
-  const ALogSource: string): string;
+  const ALogSource: string; AConnection: TFDConnection;
+  ARequireAuthentication: Boolean): string;
 var
   LActionName: string;
   LParts: TArray<string>;
@@ -45,6 +53,11 @@ begin
       if not Assigned(ARequest) then begin
         LStatusCode := 500;
         Exit(THelperResponse.CreateResponse(LStatusCode, 'Internal server error.', AData));
+      end;
+
+      if ARequireAuthentication and not IsAuthenticated(AConnection, ARequest) then begin
+        LStatusCode := 401;
+        Exit(THelperResponse.CreateResponse(LStatusCode, 'Session expired or invalid', AData));
       end;
 
       LParts := ARequest.PathInfo.Trim(['/']).Split(['/']);
@@ -78,6 +91,48 @@ begin
     end;
   finally
     AStatusCode := LStatusCode;
+  end;
+end;
+
+class function THelperEndpoint.IsAuthenticated(AConnection: TFDConnection;
+  ARequest: TWebRequest): Boolean;
+var
+  LAccessToken: string;
+  LDataset: TFDQuery;
+begin
+  Result := False;
+  if (not Assigned(AConnection)) or (not Assigned(ARequest)) then
+    Exit;
+
+  LAccessToken := TSecurityToken.ExtractAccessToken(ARequest);
+  if LAccessToken = '' then
+    Exit;
+
+  LDataset := THelperDatabase.CreateQuery(AConnection);
+  try
+    TQueryFunction.SQLAdd(
+      LDataset,
+      'SELECT u.user_id ' +
+      'FROM access_token at ' +
+      'INNER JOIN user_session us ON us.id = at.session_internal_id ' +
+      'INNER JOIN users u ON u.id = us.user_internal_id ' +
+      'WHERE at.token_hash = :hash ' +
+      'AND at.revoked = 0 ' +
+      'AND at.expires_at > NOW() ' +
+      'AND at.deleted_at IS NULL ' +
+      'AND us.revoked = 0 ' +
+      'AND us.expires_at > NOW() ' +
+      'AND us.deleted_at IS NULL ' +
+      'AND u.is_active = 1 ' +
+      'AND u.deleted_at IS NULL ' +
+      'ORDER BY at.id DESC LIMIT 1',
+      True
+    );
+    TQueryFunction.SQLParamByName(LDataset, 'hash', TGlobalFunction.HashHMAC256(LAccessToken));
+    TQueryFunction.SQLOpen(LDataset);
+    Result := not LDataset.IsEmpty;
+  finally
+    FreeAndNil(LDataset);
   end;
 end;
 

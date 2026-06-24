@@ -14,7 +14,6 @@ type
     function ToJSONResponse(AStatusCode: Integer; AMessage: string): string; overload;
     function ToJSONResponse(AStatusCode: Integer; AMessage: string;
       AMemoryTable: TFDMemTable): string; overload;
-    function ExpandSQLWithParams: string;
   end;
 
   TJSONPayloadBuilder = class
@@ -48,7 +47,6 @@ implementation
 
 uses
   System.JSON, System.DateUtils, System.Generics.Collections,
-  FireDAC.Stan.Param,
   BFA.Helper.Strings, BFA.Core.Messages;
 
 const
@@ -431,19 +429,6 @@ begin
   finally
     FreeAndNil(LData);
   end;
-end;
-
-function TFDQueryJSONHelper.ExpandSQLWithParams: string;
-var
-  I: Integer;
-  LSQLText: string;
-begin
-  LSQLText := Self.SQL.Text;
-  for I := 0 to Self.Params.Count - 1 do begin
-    LSQLText := StringReplace(LSQLText, ':' + Self.Params[I].Name,
-      QuotedStr(Self.Params[I].Value), [rfReplaceAll, rfIgnoreCase]);
-  end;
-  Result := LSQLText;
 end;
 
 class function THelperResponse.CreateResponse(AStatusCode: Integer;

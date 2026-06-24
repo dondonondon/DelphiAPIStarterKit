@@ -4,6 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.StrUtils, Web.HTTPApp,
+  System.IOUtils, System.SyncObjs,
   FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param,
   FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,
   Data.DB, FireDAC.Comp.DataSet, FireDAC.Comp.Client;
@@ -39,7 +40,7 @@ implementation
 
 {$R *.dfm}
 
-uses Web.WebReq, BFA.Core.Rest, uDM,
+uses Web.WebReq, BFA.Core.Rest, BFA.Core.Response, uDM,
   BFA.Helper.Strings, BFA.Core.Config, BFA.Core.Request,
   DB.ConnectionFactory;
 
@@ -64,6 +65,12 @@ begin
 
   LPath := Request.PathInfo.Trim(['/']);
   LParts := LPath.Split(['/']);
+  if (Length(LParts) < 3) or (not SameText(LParts[0], 'api')) or
+    (Trim(LParts[1]) = '') or (Trim(LParts[2]) = '') then begin
+    Response.StatusCode := 404;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'API route not found');
+    Exit(Response.Content);
+  end;
 
   var LCon := TDBConnectionFactory.GetConnection;
   LCoreAPI := TClassHelper.Create;
@@ -115,23 +122,57 @@ end;
 procedure TWM.WMimageAction(Sender: TObject; Request: TWebRequest;
   Response: TWebResponse; var Handled: Boolean);
 var
-  MemoryStream: TMemoryStream;
+  LExtension: string;
+  LFileName: string;
+  LFilePath: string;
+  LStream: TFileStream;
 begin
-  var LFileName := Request.QueryFields.Values['filename'];
+  Handled := True;
+  Response.ContentType := 'application/json';
+  Response.ContentEncoding := 'utf-8';
 
-  if FileExists(TGlobalFunction.LoadFile(LFileName)) then begin
-    MemoryStream := TMemoryStream.Create;
-    try
-      MemoryStream.LoadFromFile(TGlobalFunction.LoadFile(LFileName));
-      MemoryStream.Position := 0;
-      Response.ContentStream := MemoryStream;
-      Response.ContentType := 'image/jpeg';
-      Response.SendResponse;
-    finally
-      Inc(COUNTER_HIT_REQUEST);
-    end;
-  end else begin
+  if Request.MethodType <> mtGet then begin
+    Response.StatusCode := 405;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'Method Not Allowed');
+    Exit;
+  end;
+
+  LFileName := Trim(Request.QueryFields.Values['filename']);
+  if (LFileName = '') or (ExtractFileName(LFileName) <> LFileName) then begin
+    Response.StatusCode := 400;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'Invalid filename');
+    Exit;
+  end;
+
+  LExtension := LowerCase(ExtractFileExt(LFileName));
+  if not MatchText(LExtension, ['.jpg', '.jpeg', '.png', '.bmp']) then begin
+    Response.StatusCode := 400;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'Unsupported image type');
+    Exit;
+  end;
+
+  LFilePath := TGlobalFunction.LoadFile(LFileName);
+  if not FileExists(LFilePath) then begin
     Response.StatusCode := 404;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'File not found');
+    Exit;
+  end;
+
+  LStream := TFileStream.Create(LFilePath, fmOpenRead or fmShareDenyWrite);
+  try
+    if (LExtension = '.jpg') or (LExtension = '.jpeg') then
+      Response.ContentType := 'image/jpeg'
+    else if LExtension = '.png' then
+      Response.ContentType := 'image/png'
+    else
+      Response.ContentType := 'image/bmp';
+
+    Response.ContentStream := LStream;
+    Response.SendResponse;
+    Response.ContentStream := nil;
+    TInterlocked.Increment(COUNTER_HIT_REQUEST);
+  finally
+    FreeAndNil(LStream);
   end;
 end;
 
