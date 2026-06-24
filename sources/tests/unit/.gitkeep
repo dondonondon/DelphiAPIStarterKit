@@ -1,0 +1,16 @@
+Unit Tests
+
+Purpose: Isolated unit tests for individual classes and methods.
+
+What belongs here:
+- Service unit tests (TAuthService, TUserService, etc.)
+- Repository unit tests with mocked database connections
+- Validator unit tests with various input scenarios
+- DTO serialization and deserialization tests
+- Helper class method tests (THelperJSON, THelperString, etc.)
+- RTTI routing resolution tests (THelperCore, TClassHelper)
+
+Test framework: DUnitX (recommended) or DUnit.
+Each test file should map to a single unit under test.
+Tests must not require a running server or live database.
+

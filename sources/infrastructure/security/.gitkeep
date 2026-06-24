@@ -1,0 +1,19 @@
+Security Infrastructure
+
+Purpose: Low-level security primitives and services that are independent of any specific business module.
+
+What belongs here:
+- Password hashing utilities (bcrypt, Argon2, HMAC-SHA256 wrappers)
+- Token generation and validation (JWT, opaque tokens, refresh tokens)
+- Encryption and decryption helpers (AES, RSA wrappers)
+- Secure random number and UUID generation
+- API key generation and validation
+- Request signature verification
+- Secure string comparison (constant-time)
+- Certificate and key loading utilities
+
+Do NOT place here:
+- Business authorization rules (those belong in services)
+- Feature-specific auth flows (those belong in modules/auth/)
+- WebBroker-dependent auth middleware (those belong in shared/middleware/)
+
