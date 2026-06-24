@@ -1,12 +1,13 @@
 # DelphiAPIStarterKit
 
-`DelphiAPIStarterKit` adalah starter template Delphi WebBroker untuk membuat REST API dan web service dengan struktur yang lebih rapi: routing, response helper, request validation, service layer, repository layer, FireDAC connection factory, dan contoh module CRUD.
+`DelphiAPIStarterKit` adalah starter template Delphi WebBroker untuk membuat REST API dan web service dengan struktur yang lebih rapi: RTTI-based routing, response helper, request validation, service layer, repository layer, FireDAC connection factory, dan contoh module CRUD.
 
 Project ini ditujukan sebagai fondasi awal API backend Delphi, bukan template production yang langsung aman tanpa konfigurasi ulang.
 
 ## Features
 
 - Delphi WebBroker API server.
+- RTTI-based route dispatch dari URL resource ke endpoint class yang sudah diregister.
 - FireDAC database access dengan MySQL/MariaDB.
 - Struktur module berbasis `RestAPI`, `Service`, `Repository`, `Validator`, dan `DTO`.
 - Standard JSON response envelope.
@@ -27,6 +28,7 @@ Project ini ditujukan sebagai fondasi awal API backend Delphi, bukan template pr
 - MySQL atau MariaDB server.
 - MySQL/MariaDB native client library sesuai target aplikasi.
 - Windows untuk build default `Win32`.
+- Linux64 sudah aktif di project Delphi dan membutuhkan setup Delphi Linux toolchain/PAServer.
 
 Build script default memakai target `Debug | Win32`. Gunakan environment variable untuk mengganti Delphi environment script, build configuration, atau platform.
 
@@ -163,6 +165,7 @@ FireDAC MySQL membutuhkan native client library yang sesuai bitness aplikasi:
 
 - App `Win32` butuh client library 32-bit.
 - App `Win64` butuh client library 64-bit.
+- Deployment `Linux64` butuh `libmysqlclient.so` atau `libmariadb.so` 64-bit yang compatible dan tersedia di server Linux.
 
 Jangan mengambil `libmysql.dll` dari mirror tidak resmi. Gunakan salah satu sumber resmi:
 
@@ -197,6 +200,18 @@ Artinya aplikasi akan mencari client library berdasarkan current directory. Jika
 
 Rekomendasi untuk open-source repo: jangan commit `libmysql.dll` atau ZIP binary ke repository. Cukup dokumentasikan dependency dan cara install-nya.
 
+### Catatan Client Library Linux
+
+Untuk deployment Linux64, install MySQL/MariaDB client library di server target menggunakan package manager distro server atau package resmi vendor.
+
+Startup code Linux saat ini mengisi:
+
+```pascal
+DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
+```
+
+Jika server Linux Anda menyimpan client library di lokasi berbeda, sesuaikan `VendorHome` di `DelphiAPIStarterKit.dpr` atau ubah startup code agar path ini dibaca dari konfigurasi deployment.
+
 ## Build
 
 Default build script:
@@ -226,6 +241,16 @@ set BUILD_CONFIG=Release
 set BUILD_PLATFORM=Win64
 compile.bat
 ```
+
+Contoh build Linux64:
+
+```bat
+set BUILD_CONFIG=Release
+set BUILD_PLATFORM=Linux64
+compile.bat
+```
+
+Build Linux membutuhkan Delphi Linux toolchain dan koneksi PAServer yang sudah dikonfigurasi.
 
 Build manual:
 
@@ -303,7 +328,8 @@ GET    /api/v1/products
 GET    /api/v1/customers
 ```
 
-Route akan diarahkan ke class dengan pola:
+Route diarahkan ke endpoint class yang sudah diregister menggunakan lightweight RTTI-based dispatcher.
+Dispatcher membentuk nama target class dari API version dan resource name:
 
 ```text
 TRestClass{APIVersion}{RequestClass}
@@ -315,7 +341,7 @@ Contoh:
 /api/v1/users -> TRestClassV1User
 ```
 
-Setelah itu request masuk ke method `Route`, lalu dipetakan ke service action.
+Di internal core, dispatcher memakai `FindClass` untuk mencari endpoint class yang sudah diregister, membuat instance, lalu memanggil method `Route`. Method `Route` di endpoint kemudian memetakan HTTP method dan path ke service action yang sesuai.
 
 ## Menambahkan Endpoint Baru
 
@@ -442,7 +468,7 @@ Tambahkan unit baru ke `uses` di:
 sources/core/BFA.Core.Rest.pas
 ```
 
-Lalu register class di `RegisterClassAPI`:
+Lalu register class di `RegisterClassAPI`. Step ini wajib karena RTTI dispatcher mencari endpoint class melalui Delphi class registry:
 
 ```pascal
 RegisterClassAPI([TRestClassV1User, TRestClassV1Auth, TRestClassV1Product,
