@@ -1,0 +1,17 @@
+Shared Types
+
+Purpose: Cross-cutting type definitions, interfaces, records, and enumerations used by multiple modules or layers.
+
+What belongs here:
+- Shared interfaces (IAuthenticatable, ILogger, IConfigProvider, etc.)
+- Common record types (TPaginationParams, TFilterCriteria, TSortOrder)
+- Shared enumerated types (TUserRole, TLogLevel, THttpMethod, TCrudAction)
+- Generic type aliases and type helpers
+- API response envelope type definitions
+- Cross-module DTOs that are not specific to one feature
+
+Do NOT place here:
+- Feature-specific DTOs (those belong in their module folder)
+- Implementation classes (no services, repositories, or controllers)
+- Any unit with database or WebBroker dependencies
+

@@ -1,0 +1,16 @@
+Integration Tests
+
+Purpose: Tests that verify multiple units working together, including real database access and HTTP request/response cycles.
+
+What belongs here:
+- Endpoint integration tests (POST /api/v1/Auth/Login, GET /api/v1/User, etc.)
+- Database integration tests with a test database instance
+- WebBroker request/response pipeline tests
+- Transaction rollback and commit scenario tests
+- Authentication flow end-to-end tests
+- Concurrent request handling tests
+
+Test framework: DUnitX (recommended) with a dedicated test database.
+Each test should set up and tear down its own test data.
+Tests may require a running TIdHTTPWebBrokerBridge instance on a test port.
+

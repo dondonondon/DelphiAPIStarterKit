@@ -1,0 +1,20 @@
+Logging Infrastructure
+
+Purpose: Logging abstraction and concrete implementations for structured application logging.
+
+What belongs here:
+- Logger interface or abstract base class (ILogger / TBaseLogger)
+- File logger implementation with log rotation support
+- Console/terminal logger implementation
+- Structured JSON logger for log aggregation systems
+- Log level definitions (Debug, Info, Warning, Error, Fatal)
+- Log entry DTO with timestamp, level, source, message, and context data
+- Log formatting utilities (plain text, JSON, key=value)
+- Thread-safe logger factory or singleton access
+
+Design rules:
+- All loggers must be thread-safe for concurrent WebBroker request handling.
+- Never log passwords, tokens, authorization headers, or sensitive payloads.
+- Log level must be configurable at runtime.
+- Prefer injecting ILogger into services rather than calling a global singleton directly.
+

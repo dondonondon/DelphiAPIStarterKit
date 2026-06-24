@@ -1,0 +1,16 @@
+Shared Middleware
+
+Purpose: Reusable WebBroker middleware components that process HTTP requests and responses in a pipeline before reaching endpoint handlers.
+
+What belongs here:
+- Authentication middleware (token extraction, validation, user injection)
+- CORS middleware (cross-origin header management)
+- Request logging middleware (method, path, duration, status code)
+- Rate limiting middleware (per-IP or per-token request throttling)
+- Request timing and performance monitoring middleware
+- Content type validation middleware (application/json enforcement)
+- Request body size limiting middleware
+- Compression middleware (gzip/deflate response encoding)
+
+Middleware pattern: Each middleware should accept a TWebRequest, TWebResponse, and a next-handler reference. Middleware may short-circuit (return early) or pass to the next handler.
+

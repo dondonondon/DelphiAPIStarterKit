@@ -1,0 +1,21 @@
+External Integrations
+
+Purpose: Client wrappers and adapters for third-party external services and APIs.
+
+What belongs here:
+- Third-party REST API clients (payment gateways, SMS providers, email services)
+- Cloud storage adapters (AWS S3, Azure Blob, Google Cloud Storage)
+- External authentication provider clients (OAuth2, SAML, OpenID Connect)
+- Webhook sender and receiver utilities
+- External service DTOs and response models
+- Retry policy and circuit breaker helpers for external calls
+- External API configuration and credential management
+
+Design rules:
+- Each external service gets its own unit or subfolder.
+- Never hardcode external service credentials; use configuration or environment variables.
+- Wrap all external calls in try/except; external failures must not crash the server.
+- Use TRequestAPI (from shared/clients/) as the base HTTP client where possible.
+- Implement timeout handling for all external calls.
+- Log external call failures with enough context for debugging but without exposing secrets.
+
