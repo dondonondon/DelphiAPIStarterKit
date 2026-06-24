@@ -11,7 +11,7 @@
  Target Server Version : 50744 (5.7.44)
  File Encoding         : 65001
 
- Date: 24/06/2026 12:14:13
+ Date: 24/06/2026 12:17:24
 */
 
 SET NAMES utf8mb4;
@@ -59,11 +59,16 @@ CREATE TABLE `category`  (
   UNIQUE INDEX `uq_category_public_id`(`category_id`) USING BTREE,
   UNIQUE INDEX `uq_category_name`(`category_name`) USING BTREE,
   INDEX `idx_category_active`(`deleted_at`, `is_active`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of category
 -- ----------------------------
+INSERT INTO `category` VALUES (1, '550e8400-e29b-41d4-a716-446655440111', 'Electronics', 'Electronic devices and accessories', 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `category` VALUES (2, '550e8400-e29b-41d4-a716-446655440222', 'Office Supplies', 'Office stationery and workplace supplies', 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `category` VALUES (3, '550e8400-e29b-41d4-a716-446655440333', 'Food and Beverage', 'Packaged food and beverage products', 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `category` VALUES (4, '550e8400-e29b-41d4-a716-446655440444', 'Books', 'Books, manuals, and printed references', 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `category` VALUES (5, '550e8400-e29b-41d4-a716-446655440555', 'Furniture', 'Office and home furniture products', 1, '2026-06-24 10:00:00', NULL, NULL);
 
 -- ----------------------------
 -- Table structure for customer
@@ -151,11 +156,19 @@ CREATE TABLE `product`  (
   INDEX `idx_product_category`(`category_internal_id`) USING BTREE,
   INDEX `idx_product_active`(`deleted_at`, `is_active`) USING BTREE,
   CONSTRAINT `fk_product_category` FOREIGN KEY (`category_internal_id`) REFERENCES `category` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
+) ENGINE = InnoDB AUTO_INCREMENT = 9 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
 -- Records of product
 -- ----------------------------
+INSERT INTO `product` VALUES (1, '550e8400-e29b-41d4-a716-446655440000', 'Sample Product', 'Sample description', 12500.00, 25, 1, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (2, '550e8400-e29b-41d4-a716-446655441001', 'Wireless Mouse', 'Compact wireless mouse for daily office use', 185000.00, 40, 1, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (3, '550e8400-e29b-41d4-a716-446655441002', 'Mechanical Keyboard', 'USB mechanical keyboard with tactile switches', 650000.00, 15, 1, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (4, '550e8400-e29b-41d4-a716-446655441003', 'A4 Copy Paper', 'White A4 copy paper 80 gsm, 500 sheets', 58000.00, 120, 2, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (5, '550e8400-e29b-41d4-a716-446655441004', 'Ballpoint Pen Pack', 'Black ballpoint pen pack of 12 pieces', 32000.00, 85, 2, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (6, '550e8400-e29b-41d4-a716-446655441005', 'Mineral Water Carton', 'Bottled mineral water carton for office pantry', 72000.00, 60, 3, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (7, '550e8400-e29b-41d4-a716-446655441006', 'REST API Handbook', 'Practical backend API reference book', 145000.00, 20, 4, 1, '2026-06-24 10:00:00', NULL, NULL);
+INSERT INTO `product` VALUES (8, '550e8400-e29b-41d4-a716-446655441007', 'Office Chair', 'Adjustable ergonomic office chair', 1250000.00, 8, 5, 1, '2026-06-24 10:00:00', NULL, NULL);
 
 -- ----------------------------
 -- Table structure for user_session
