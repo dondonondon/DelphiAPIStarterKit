@@ -1,4 +1,0 @@
-interface:
-  display_name: "Implement Delphi API Feature"
-  short_description: "Implement a scoped Delphi API feature and its contracts"
-  default_prompt: "Use $implement-feature to implement the requested DelphiAPIStarterKit behavior with relevant validation."

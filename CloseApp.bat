@@ -1,3 +1,5 @@
 @echo off
-echo Build does not stop running applications. Stop the intended development instance explicitly before rebuilding.
-exit /b 0
+tasklist /FI "IMAGENAME eq DelphiAPIStarterKit.exe" | findstr /I "DelphiAPIStarterKit.exe" >nul
+if %ERRORLEVEL% equ 0 (
+    taskkill /F /IM DelphiAPIStarterKit.exe
+)

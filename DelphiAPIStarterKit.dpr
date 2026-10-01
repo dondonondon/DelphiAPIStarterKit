@@ -51,18 +51,7 @@ uses
   Customer.Service in 'sources\modules\customers\Customer.Service.pas',
   Customer.Validator in 'sources\modules\customers\Customer.Validator.pas',
   BFA.Core.Helper in 'sources\core\BFA.Core.Helper.pas',
-  BFA.Security.Token in 'sources\infrastructure\security\BFA.Security.Token.pas',
-  BFA.Security.Crypto in 'sources\infrastructure\security\BFA.Security.Crypto.pas',
-  BFA.Logger in 'sources\infrastructure\logging\BFA.Logger.pas',
-  BFA.Helper.Clock in 'sources\shared\helpers\BFA.Helper.Clock.pas',
-  Auth.Policy in 'sources\modules\auth\Auth.Policy.pas',
-  Auth.Settings in 'sources\modules\auth\Auth.Settings.pas',
-  RestAPI.Role in 'sources\modules\roles\RestAPI.Role.pas',
-  Role.Repository in 'sources\modules\roles\Role.Repository.pas',
-  Role.Validator in 'sources\modules\roles\Role.Validator.pas',
-  Role.Service in 'sources\modules\roles\Role.Service.pas',
-  BFA.Security.Transport in 'sources\infrastructure\security\BFA.Security.Transport.pas',
-  Auth.Bootstrap in 'sources\modules\auth\Auth.Bootstrap.pas';
+  BFA.Security.Token in 'sources\infrastructure\security\BFA.Security.Token.pas';
 
 {$R *.res}
 
@@ -202,20 +191,12 @@ end;
 
 procedure RunServer(APort: Integer);
 var
-  LServer: TSecurityHTTPBridge;
-  LTransport: TSecurityTransport;
+  LServer: TIdHTTPWebBrokerBridge;
+//  LServer : TsgcWSHTTPWebBrokerBridgeServer;
 begin
-  TAuthSettings.Initialize;
-  TSecurityCrypto.Initialize;
-  LTransport := nil;
-  LServer := nil;
-  DM := nil;
+  LServer := TIdHTTPWebBrokerBridge.Create(nil);
+  DM := TDM.Create(nil);
   try
-    LTransport := TSecurityTransport.Create;
-    LServer := TSecurityHTTPBridge.Create(nil);
-    DM := TDM.Create(nil);
-    LServer.OnParseAuthentication := LTransport.ParseAuthentication;
-    LServer.OnCommandError := LTransport.CommandError;
     LServer.DefaultPort := APort;
 
     if CheckPort(APort) = 0 then
@@ -224,15 +205,13 @@ begin
     try
       TGlobalFunction.LoadFile('');
       {$IF DEFINED (LINUX)}
-      DM.FDPhysMySQLDriverLink.VendorLib := TServerConfig.ReadValue('Database', 'VendorLib', 'DELPHI_API_DB_VENDOR_LIB', '');
+      DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
       {$ELSE IF DEFINED (MSWINDOWS)}
-      DM.FDPhysMySQLDriverLink.VendorLib := TServerConfig.ReadValue('Database', 'VendorLib', 'DELPHI_API_DB_VENDOR_LIB', '');
+      DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
       {$ENDIF}
 //      DM.Con.Connected := True;
-    except on E: Exception do begin
-      THelperLogger.Error('Startup configuration', E);
-      raise;
-    end;
+    except on E: Exception do
+      Writeln(E.Message);
     end;
 
     LServer.Bindings.Clear;
@@ -245,13 +224,9 @@ begin
 
   finally
     TerminateThreads;
-    try
-      if Assigned(LServer) then LServer.Active := False;
-    finally
-      FreeAndNil(LServer);
-      FreeAndNil(DM);
-      FreeAndNil(LTransport);
-    end;
+    LServer.Active := False;
+    LServer.Free;
+    DM.Free;
   end;
 end;
 
@@ -259,40 +234,9 @@ begin
   try
     if WebRequestHandler <> nil then
       WebRequestHandler.WebModuleClass := WebModuleClass;
-    if (ParamCount = 1) and ((ParamStr(1) = '--bootstrap-admin') or (ParamStr(1) = '--auth-cleanup')) then begin
-      TAuthSettings.Initialize;
-      TSecurityCrypto.Initialize;
-      DM := TDM.Create(nil);
-      try
-        DM.FDPhysMySQLDriverLink.VendorLib := TServerConfig.ReadValue('Database', 'VendorLib', 'DELPHI_API_DB_VENDOR_LIB', '');
-        var LConnection := TDBConnectionFactory.GetConnection;
-        try
-          if ParamStr(1) = '--bootstrap-admin' then TAuthBootstrap.Execute(LConnection)
-          else begin
-            var LRepository := TAuthRepository.Create(LConnection);
-            try
-              LRepository.Cleanup(100);
-            finally
-              FreeAndNil(LRepository);
-            end;
-          end;
-        finally
-          FreeAndNil(LConnection);
-        end;
-      finally
-        FreeAndNil(DM);
-      end;
-      Writeln('Offline auth operation completed.');
-      Exit;
-    end;
-    var LPort := StrToInt(TServerConfig.ReadValue('HTTP', 'Port', 'DELPHI_API_PORT', '9000'));
-    if (LPort < 1) or (LPort > 65535) then raise Exception.Create('Invalid HTTP port.');
-    RunServer(LPort);
+    RunServer(9381);
   except
-    on E: Exception do begin
-      THelperLogger.Error('Startup', E);
-      Writeln(ErrOutput, 'Server startup failed.');
-      ExitCode := 1;
-    end;
+    on E: Exception do
+      Writeln(E.ClassName, ': ', E.Message);
   end
 end.

@@ -16,7 +16,6 @@ type
     procedure WMHelloWorldAction(Sender: TObject; Request: TWebRequest;
       Response: TWebResponse; var Handled: Boolean);
     procedure WebModuleCreate(Sender: TObject);
-    procedure WebModuleException(Sender: TObject; E: Exception; var Handled: Boolean);
     procedure WMimageAction(Sender: TObject; Request: TWebRequest;
       Response: TWebResponse; var Handled: Boolean);
     procedure WMtestAction(Sender: TObject; Request: TWebRequest;
@@ -43,8 +42,7 @@ implementation
 
 uses Web.WebReq, BFA.Core.Rest, BFA.Core.Response, uDM,
   BFA.Helper.Strings, BFA.Core.Config, BFA.Core.Request,
-  DB.ConnectionFactory, BFA.Core.Helper, BFA.Security.Transport, BFA.Security.Token, BFA.Core.Endpoint,
-  BFA.Logger, Auth.Policy;
+  DB.ConnectionFactory;
 
 //function TWM.AllowServerFunctionInvoker: Boolean;
 //begin
@@ -52,77 +50,56 @@ uses Web.WebReq, BFA.Core.Rest, BFA.Core.Response, uDM,
 //    (Request.RemoteAddr = '0:0:0:0:0:0:0:1') or (Request.RemoteAddr = '::1');
 //end;
 
-function TWM.SendToCoreAPI(WebAction: TWebActionItem; Request: TWebRequest;
-  Response: TWebResponse; ACheckHeader: Boolean): string;
-var LParts: TArray<string>; LAction, LAllow: string; LStatus: Integer;
-  LCon: TFDConnection; LCoreAPI: TClassHelper;
-begin
-  THelperLogger.BeginRequest;
-  try
-    Response.SetCustomHeader('X-Correlation-ID', THelperLogger.CorrelationID);
-  Result := '';
-  Response.SetCustomHeader('Cache-Control', 'no-store');
-  try
-    if TSecurityTransport.CORS(Request, Response) then Exit;
-    if not THelperCore.InspectRoute(Request.PathInfo, Request.Method, LAction, LStatus, LAllow) then begin
-      if LAllow <> '' then Response.SetCustomHeader('Allow', LAllow);
-      Result := THelperResponse.CreateResponse(LStatus, 'Route or method not allowed.');
-      TSecurityTransport.JSONResponse(Response, LStatus, Result);
-      Exit;
-    end;
-    if (SameText(Request.Method, 'GET') or SameText(Request.Method, 'DELETE')) and (Request.Content <> '') then
-      raise ERequestInvalid.Create('This method does not accept a request body.');
-    TSecurityToken.ExtractAccessToken(Request);
-    LParts := Request.PathInfo.Trim(['/']).Split(['/']);
-    LCon := TDBConnectionFactory.GetConnection;
-    try
-      LCoreAPI := TClassHelper.Create;
-      try
-        LCoreAPI.Connection := LCon;
-        LCoreAPI.APIVersion := 'v1';
-        LCoreAPI.RequestClass := LParts[2];
-        Result := LCoreAPI.CallMethodAPI(Request.Content, WebAction, Request, Response);
-        TSecurityTransport.JSONResponse(Response, LCoreAPI.StatusCode, Result);
-        if LCoreAPI.StatusCode = 429 then Response.SetCustomHeader('Retry-After', '60');
-      finally
-        FreeAndNil(LCoreAPI);
-      end;
-    finally
-      FreeAndNil(LCon);
-    end;
-  except
-    on E: EAuthPolicy do begin
-      Result := THelperResponse.CreateResponse(E.Status, E.Message);
-      TSecurityTransport.JSONResponse(Response, E.Status, Result);
-    end;
-    on E: ERequestInvalid do begin
-      Result := THelperResponse.CreateResponse(E.Status, E.Message);
-      TSecurityTransport.JSONResponse(Response, E.Status, Result);
-    end;
-    on E: Exception do begin
-      THelperLogger.Error('HTTP dispatch', E);
-      Result := THelperResponse.CreateResponse(500, 'Internal server error.');
-      TSecurityTransport.JSONResponse(Response, 500, Result);
-    end;
-  end;
-  finally
-    THelperLogger.EndRequest;
-  end;
-end;
+function TWM.SendToCoreAPI(WebAction: TWebActionItem;
+  Request: TWebRequest; Response: TWebResponse; ACheckHeader: Boolean): String;
+var
+  LPath: string;
+  LParts: TArray<string>;
 
-procedure TWM.WebModuleException(Sender: TObject; E: Exception; var Handled: Boolean);
+  LResponse : String;
+  LCoreAPI : TClassHelper;
 begin
-  Handled := True;
-  THelperLogger.Error('WebModule', E);
-  Response.SetCustomHeader('Cache-Control', 'no-store');
-  TSecurityTransport.JSONResponse(Response, 500, THelperResponse.CreateResponse(500, 'Internal server error.'));
+  Response.StatusCode := 404;
+  Response.ContentType := 'application/json';
+  Response.ContentEncoding := 'utf-8';
+
+  LPath := Request.PathInfo.Trim(['/']);
+  LParts := LPath.Split(['/']);
+  if (Length(LParts) < 3) or (not SameText(LParts[0], 'api')) or
+    (Trim(LParts[1]) = '') or (Trim(LParts[2]) = '') then begin
+    Response.StatusCode := 404;
+    Response.Content := THelperResponse.CreateResponse(Response.StatusCode, 'API route not found');
+    Exit(Response.Content);
+  end;
+
+  var LCon := TDBConnectionFactory.GetConnection;
+  LCoreAPI := TClassHelper.Create;
+  try
+    LCoreAPI.Connection := LCon;
+    LCoreAPI.APIVersion := LParts[1];
+    LCoreAPI.RequestClass := LParts[2];
+
+    if Request.ContentType.StartsWith('multipart/form-data') then
+      LResponse := LCoreAPI.CallMethodAPI('', WebAction, Request, Response) else
+      LResponse := LCoreAPI.CallMethodAPI(Request.Content, WebAction, Request, Response);
+
+    Response.StatusCode := LCoreAPI.StatusCode;
+    Response.Content := LResponse;
+
+  finally
+    LCon.Free;
+    LCoreAPI.Free;
+  end;
 end;
 
 procedure TWM.WebModule1DefaultHandlerAction(Sender: TObject;
   Request: TWebRequest; Response: TWebResponse; var Handled: Boolean);
 begin
-  Handled := True;
-  SendToCoreAPI(nil, Request, Response);
+  Response.Content :=
+    '<html>' +
+    '<head><title>DataSnap Server</title></head>' +
+    '<body>DataSnap Server</body>' +
+    '</html>';
 end;
 
 procedure TWM.WebModuleCreate(Sender: TObject);
@@ -132,7 +109,6 @@ end;
 procedure TWM.WMapiAction(Sender: TObject; Request: TWebRequest;
   Response: TWebResponse; var Handled: Boolean);
 begin
-  Handled := True;
   SendToCoreAPI(TWebActionItem(Sender), Request, Response, False);
 end;
 
@@ -153,7 +129,7 @@ var
 begin
   Handled := True;
   Response.ContentType := 'application/json';
-  Response.ContentEncoding := '';
+  Response.ContentEncoding := 'utf-8';
 
   if Request.MethodType <> mtGet then begin
     Response.StatusCode := 405;
@@ -184,11 +160,16 @@ begin
 
   LStream := TFileStream.Create(LFilePath, fmOpenRead or fmShareDenyWrite);
   try
-    if (LExtension = '.jpg') or (LExtension = '.jpeg') then Response.ContentType := 'image/jpeg'
-    else if LExtension = '.png' then Response.ContentType := 'image/png'
-    else Response.ContentType := 'image/bmp';
+    if (LExtension = '.jpg') or (LExtension = '.jpeg') then
+      Response.ContentType := 'image/jpeg'
+    else if LExtension = '.png' then
+      Response.ContentType := 'image/png'
+    else
+      Response.ContentType := 'image/bmp';
+
     Response.ContentStream := LStream;
-    LStream := nil;
+    Response.SendResponse;
+    Response.ContentStream := nil;
     TInterlocked.Increment(COUNTER_HIT_REQUEST);
   finally
     FreeAndNil(LStream);

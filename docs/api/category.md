@@ -223,8 +223,3 @@ Soft-delete a category by setting `is_active = 0` and `deleted_at = NOW()`.
 | 400 | `Invalid category ID` | `category_id` exceeds 36 characters |
 | 404 | `Category not found` | No category with the given ID |
 | 500 | `Internal server error.` | Unhandled exception |
-
-
-## Auth-v2 permission gate
-
-Access credential alone is insufficient. GET requires category.read; POST category.create; PUT category.update; DELETE category.delete. Missing/inactive/deleted role or permission mapping denies 403; restricted initial-password sessions cannot access business routes. Authorization runs before service/business mutation. Credential/header/CORS/envelope rules follow [Auth](auth.md). Other domain validation/pagination remains the corresponding task scope.

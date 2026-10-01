@@ -1,4 +1,4 @@
-﻿unit Product.DTO;
+unit Product.DTO;
 
 interface
 
@@ -40,14 +40,9 @@ type
     class function CreateProductResponse(const AProductID, AProductName,
       ADescription: string; const APrice: Currency; AStock: Integer;
       const ACategoryID, ACategoryName: string; AIsActive: Integer): TStringList;
-    class function CreateProductJSONResponse(const AProductID, AProductName,
-      ADescription: string; const APrice: Currency; AStock: Integer;
-      const ACategoryID, ACategoryName: string; AIsActive: Integer): string;
   end;
 
 implementation
-
-uses System.JSON;
 
 class function TProductDTO.CreateProductResponse(const AProductID,
   AProductName, ADescription: string; const APrice: Currency; AStock: Integer;
@@ -74,33 +69,7 @@ var
   LFormatSettings: TFormatSettings;
 begin
   LFormatSettings := TFormatSettings.Create('en-US');
-  Result := FormatCurr('0.00', AValue, LFormatSettings);
-end;
-
-class function TProductDTO.CreateProductJSONResponse(const AProductID, AProductName,
-  ADescription: string; const APrice: Currency; AStock: Integer;
-  const ACategoryID, ACategoryName: string; AIsActive: Integer): string;
-var LObject: TJSONObject;
-begin
-  LObject := TJSONObject.Create;
-  try
-    LObject.AddPair('product_id', AProductID);
-    LObject.AddPair('product_name', AProductName);
-    LObject.AddPair('description', ADescription);
-    LObject.AddPair('price', TJSONNumber.Create(CurrToStr(APrice, TFormatSettings.Invariant)));
-    LObject.AddPair('stock', TJSONNumber.Create(AStock));
-    if ACategoryID = '' then begin
-      LObject.AddPair('category_id', TJSONNull.Create);
-      LObject.AddPair('category_name', TJSONNull.Create);
-    end else begin
-      LObject.AddPair('category_id', ACategoryID);
-      LObject.AddPair('category_name', ACategoryName);
-    end;
-    LObject.AddPair('is_active', TJSONBool.Create(AIsActive = 1));
-    Result := LObject.ToJSON;
-  finally
-    FreeAndNil(LObject);
-  end;
+  Result := FormatFloat('0.00', AValue, LFormatSettings);
 end;
 
 end.

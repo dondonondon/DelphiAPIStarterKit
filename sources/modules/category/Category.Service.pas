@@ -1,4 +1,4 @@
-﻿unit Category.Service;
+unit Category.Service;
 
 interface
 
@@ -6,14 +6,12 @@ uses
   System.Classes,
   FireDAC.Comp.Client,
   Web.HTTPApp,
-  Category.Repository, Auth.Repository;
+  Category.Repository;
 
 type
   TCategoryService = class(TPersistent)
   private
     FConnection: TFDConnection;
-    FRequest: TWebRequest;
-    FSecurity: TAuthRepository;
     FData: TFDMemTable;
     FParts: TArray<string>;
     FRepository: TCategoryRepository;
@@ -21,8 +19,7 @@ type
 
     function ExtractRouteCategoryID(out ACategoryID: string;
       out AMessage: string): Boolean;
-    procedure BeginMutation(const APermission: string);
-    function Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
+    function InternalServerError: string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
       ARequest: TWebRequest; const AParts: TArray<string>);
@@ -40,7 +37,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Auth.Policy, BFA.Security.Token,
+  System.SysUtils,
   Data.DB,
   BFA.Core.Response,
   BFA.Helper.Strings,
@@ -53,8 +50,6 @@ constructor TCategoryService.Create(AConnection: TFDConnection;
 begin
   inherited Create;
   FConnection := AConnection;
-  FRequest := ARequest;
-  FSecurity := TAuthRepository.Create(FConnection);
   FData := AData;
   FParts := AParts;
   FStatusCode := 500;
@@ -62,36 +57,44 @@ begin
 end;
 
 function TCategoryService.Delete: string;
-var LID, LMessage: string; LQuery: TFDQuery; LRows: Integer;
+var
+  LCategoryID: string;
+  LMessage: string;
+  LRowsAffected: Integer;
 begin
-  if not ExtractRouteCategoryID(LID, LMessage) then begin
+  if not ExtractRouteCategoryID(LCategoryID, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  BeginMutation('category.delete');
+
   try
-    LQuery := FRepository.FindCategoryByID(LID, True);
+    FConnection.StartTransaction;
     try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Category not found.');
-    finally
-      FreeAndNil(LQuery);
+      LRowsAffected := FRepository.SoftDeleteCategory(LCategoryID);
+      if LRowsAffected = 0 then begin
+        THelperTransaction.Rollback(FConnection);
+        FStatusCode := 404;
+        Exit(THelperResponse.CreateResponse(FStatusCode, 'Category not found', FData));
+      end;
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
     end;
-    if FRepository.HasProductReferences(LID) then raise EAuthPolicy.Create(409, 'Category is referenced by a product.');
-    LRows := FRepository.SoftDeleteCategory(LID);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    FConnection.Commit;
+
+    FStatusCode := 200;
+    Result := THelperResponse.CreateResponse(FStatusCode, 'Category deleted', FData);
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
-  FStatusCode := 200;
-  Result := THelperResponse.CreateResponse(200, 'Category deleted.');
 end;
 
 destructor TCategoryService.Destroy;
 begin
   FreeAndNil(FRepository);
-  FreeAndNil(FSecurity);
   inherited;
 end;
 
@@ -141,66 +144,141 @@ begin
 end;
 
 function TCategoryService.Insert: string;
-var LID, LMessage: string; LRequest: TCategoryCreateRequest; LRows: Integer;
+var
+  LCategoryID: string;
+  LDataset: TFDQuery;
+  LMessage: string;
+  LRequest: TCategoryCreateRequest;
+  LResponseData: TStringList;
 begin
   if not TCategoryValidator.ValidateCreate(FData, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := TGlobalFunction.NewDatabaseUUID;
-  BeginMutation('category.create');
-  try
-    LRows := FRepository.CreateCategory(LID, LRequest);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 201, 'Category created.');
-    FConnection.Commit;
-  except
-    THelperTransaction.Rollback(FConnection);
-    raise;
-  end;
-end;
 
-procedure TCategoryService.BeginMutation(const APermission: string);
-begin
-  FSecurity.BeginAuthorizedTransaction(TSecurityToken.ExtractAccessToken(FRequest), APermission);
-end;
-
-function TCategoryService.Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
-var LQuery: TFDQuery;
-begin
-  LQuery := FRepository.GetCategories(AID);
+  LDataset := FRepository.FindCategoryByName(LRequest.CategoryName);
   try
-    if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Category not found.');
-    FStatusCode := AStatus;
-    Result := THelperResponse.CreateResponse(AStatus, AMessage, LQuery);
+    if not LDataset.IsEmpty then begin
+      FStatusCode := 409;
+      Exit(THelperResponse.CreateResponse(FStatusCode, 'Category name already exists', FData));
+    end;
   finally
-    FreeAndNil(LQuery);
+    FreeAndNil(LDataset);
   end;
+
+  LCategoryID := TGlobalFunction.NewDatabaseUUID;
+
+  try
+    FConnection.StartTransaction;
+    try
+      FRepository.CreateCategory(LCategoryID, LRequest);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
+    end;
+
+    LResponseData := TCategoryDTO.CreateCategoryResponse(
+      LCategoryID,
+      LRequest.CategoryName,
+      LRequest.Description,
+      LRequest.IsActive
+    );
+    try
+      FStatusCode := 201;
+      Result := THelperResponse.CreateResponse(FStatusCode, 'Category created', LResponseData);
+    finally
+      FreeAndNil(LResponseData);
+    end;
+  except
+    on E: Exception do
+      Result := InternalServerError;
+  end;
+end;
+
+function TCategoryService.InternalServerError: string;
+begin
+  FStatusCode := 500;
+  Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
 end;
 
 function TCategoryService.Update: string;
-var LID, LMessage: string; LRequest: TCategoryUpdateRequest; LRows: Integer; LQuery: TFDQuery;
+var
+  LCategoryName: string;
+  LDataset: TFDQuery;
+  LDescription: string;
+  LIsActive: Integer;
+  LMessage: string;
+  LRequest: TCategoryUpdateRequest;
+  LResponseData: TStringList;
 begin
   if not TCategoryValidator.ValidateUpdate(FData, FParts, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := LRequest.CategoryID;
-  BeginMutation('category.update');
+
+  LDataset := FRepository.FindCategoryByID(LRequest.CategoryID);
   try
-    LQuery := FRepository.FindCategoryByID(LID, True);
-    try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Category not found.');
-    finally
-      FreeAndNil(LQuery);
+    if LDataset.IsEmpty then begin
+      FStatusCode := 404;
+      Exit(THelperResponse.CreateResponse(FStatusCode, 'Category not found', FData));
     end;
-    LRows := FRepository.UpdateCategory(LRequest);
-    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 200, 'Category updated.');
-    FConnection.Commit;
+
+    LCategoryName := LDataset.FieldByName('category_name').AsString;
+    LDescription := LDataset.FieldByName('description').AsString;
+    LIsActive := LDataset.FieldByName('is_active').AsInteger;
+  finally
+    FreeAndNil(LDataset);
+  end;
+
+  if LRequest.HasCategoryName then begin
+    LDataset := FRepository.FindCategoryByName(LRequest.CategoryName, LRequest.CategoryID);
+    try
+      if not LDataset.IsEmpty then begin
+        FStatusCode := 409;
+        Exit(THelperResponse.CreateResponse(FStatusCode, 'Category name already exists', FData));
+      end;
+    finally
+      FreeAndNil(LDataset);
+    end;
+  end;
+
+  try
+    FConnection.StartTransaction;
+    try
+      FRepository.UpdateCategory(LRequest);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
+    end;
+
+    if LRequest.HasCategoryName then
+      LCategoryName := LRequest.CategoryName;
+    if LRequest.HasDescription then
+      LDescription := LRequest.Description;
+    if LRequest.HasIsActive then
+      LIsActive := LRequest.IsActive;
+
+    LResponseData := TCategoryDTO.CreateCategoryResponse(
+      LRequest.CategoryID,
+      LCategoryName,
+      LDescription,
+      LIsActive
+    );
+    try
+      FStatusCode := 200;
+      Result := THelperResponse.CreateResponse(FStatusCode, 'Category updated', LResponseData);
+    finally
+      FreeAndNil(LResponseData);
+    end;
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
 end;
 

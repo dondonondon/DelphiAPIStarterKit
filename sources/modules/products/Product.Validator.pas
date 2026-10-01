@@ -30,7 +30,7 @@ implementation
 
 uses
   System.SysUtils,
-  BFA.Helper.Validator, Data.DB, Data.FmtBcd;
+  BFA.Helper.Validator;
 
 class function TProductValidator.ExtractCategoryID(AData: TFDMemTable;
   const ARequired: Boolean; out ACategoryID: string; out AHasCategoryID: Boolean;
@@ -49,11 +49,6 @@ begin
     Exit(True);
   end;
 
-  if not AData.FieldByName('category_id').IsNull and
-    not (AData.FieldByName('category_id').DataType in [ftString,ftWideString]) then begin
-    AMessage := 'Category ID must be a string or null.';
-    Exit;
-  end;
   ACategoryID := Trim(AData.FieldByName('category_id').AsString);
   if (ACategoryID <> '') and (Length(ACategoryID) > 36) then begin
     AMessage := 'Invalid category ID';
@@ -90,7 +85,8 @@ class function TProductValidator.ParseCurrencyField(AData: TFDMemTable;
   const AFieldName, AInvalidMessage: string; out AValue: Currency;
   out AMessage: string): Boolean;
 var
-  LText: string; LParts: TArray<string>; LField: TField;
+  LFormatSettings: TFormatSettings;
+  LText: string;
 begin
   Result := False;
   AValue := 0;
@@ -98,21 +94,13 @@ begin
   if not Assigned(AData.FindField(AFieldName)) then
     Exit(True);
 
-  LField := AData.FieldByName(AFieldName);
-  if LField.IsNull or not (LField.DataType in [ftLargeint, ftFMTBcd]) then begin
-    AMessage := AInvalidMessage;
-    Exit;
-  end;
-  if LField.DataType = ftFMTBcd then LText := BcdToStr(TFMTBCDField(LField).AsBCD, TFormatSettings.Invariant)
-  else LText := IntToStr(LField.AsLargeInt);
-  LParts := LText.Split(['.']);
-  if (Length(LParts) > 1) and (Length(LParts[1].TrimRight(['0'])) > 2) then begin
-    AMessage := 'Price must be exact to two decimal places.';
-    Exit;
-  end;
-  if not TryStrToCurr(LText, AValue, TFormatSettings.Invariant) or (AValue < 0) or (AValue > 9999999999999.99) then begin
-    AMessage := 'Price must be between 0 and 9999999999999.99.';
-    Exit;
+  LText := Trim(AData.FieldByName(AFieldName).AsString);
+  LFormatSettings := TFormatSettings.Create('en-US');
+  if not TryStrToCurr(LText, AValue, LFormatSettings) then begin
+    if not TryStrToCurr(LText, AValue) then begin
+      AMessage := AInvalidMessage;
+      Exit;
+    end;
   end;
 
   Result := True;

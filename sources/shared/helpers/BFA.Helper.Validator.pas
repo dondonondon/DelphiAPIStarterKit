@@ -24,7 +24,7 @@ type
 
 implementation
 
-uses Data.DB;
+{ THelperValidator }
 
 class function THelperValidator.ExtractRouteUserID(const AParts: TArray<string>;
   out AUserID: string; out AMessage: string): Boolean;
@@ -111,9 +111,7 @@ begin
   if not Assigned(AData.FindField(AFieldName)) then
     Exit(True);
 
-  if AData.FieldByName(AFieldName).IsNull or not (AData.FieldByName(AFieldName).DataType in
-    [ftSmallint,ftInteger,ftLargeint,ftWord,ftShortint,ftByte,ftLongWord]) or
-    not TryStrToInt(AData.FieldByName(AFieldName).AsString, AValue) then begin
+  if not TryStrToInt(Trim(AData.FieldByName(AFieldName).AsString), AValue) then begin
     AMessage := AInvalidMessage;
     Exit;
   end;

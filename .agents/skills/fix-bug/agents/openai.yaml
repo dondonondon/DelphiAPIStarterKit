@@ -1,4 +1,0 @@
-interface:
-  display_name: "Fix Delphi API Bug"
-  short_description: "Repair a Delphi API defect with regression evidence"
-  default_prompt: "Use $fix-bug to diagnose and correct the requested DelphiAPIStarterKit defect."
