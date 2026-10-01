@@ -1,4 +1,4 @@
-﻿unit Category.Repository;
+unit Category.Repository;
 
 interface
 
@@ -16,10 +16,9 @@ type
 
     function CreateCategory(const ACategoryID: string;
       const ARequest: TCategoryCreateRequest): Integer;
-    function FindCategoryByID(const ACategoryID: string; ALock: Boolean = False): TFDQuery;
+    function FindCategoryByID(const ACategoryID: string): TFDQuery;
     function FindCategoryByName(const ACategoryName: string;
       const AExcludeCategoryID: string = ''): TFDQuery;
-    function HasProductReferences(const ACategoryID: string): Boolean;
     function GetCategories(const ACategoryID: string = ''): TFDQuery;
     function SoftDeleteCategory(const ACategoryID: string): Integer;
     function UpdateCategory(const ARequest: TCategoryUpdateRequest): Integer;
@@ -62,7 +61,7 @@ begin
   end;
 end;
 
-function TCategoryRepository.FindCategoryByID(const ACategoryID: string; ALock: Boolean): TFDQuery;
+function TCategoryRepository.FindCategoryByID(const ACategoryID: string): TFDQuery;
 begin
   Result := THelperDatabase.CreateQuery(FConnection);
   try
@@ -73,7 +72,6 @@ begin
       True
     );
     TQueryFunction.SQLParamByName(Result, 'category_id', ACategoryID);
-    if ALock then Result.SQL.Add('FOR UPDATE');
     TQueryFunction.SQLOpen(Result);
   except
     Result.Free;
@@ -90,14 +88,14 @@ begin
       TQueryFunction.SQLAdd(
         Result,
         'SELECT category_id FROM category WHERE category_name = :category_name ' +
-        'AND category_id <> :category_id',
+        'AND category_id <> :category_id AND deleted_at IS NULL',
         True
       );
       TQueryFunction.SQLParamByName(Result, 'category_id', AExcludeCategoryID);
     end else begin
       TQueryFunction.SQLAdd(
         Result,
-        'SELECT category_id FROM category WHERE category_name = :category_name',
+        'SELECT category_id FROM category WHERE category_name = :category_name AND deleted_at IS NULL',
         True
       );
     end;
@@ -146,7 +144,7 @@ begin
   try
     TQueryFunction.SQLAdd(
       LDataset,
-      'UPDATE category SET is_active = 0, deleted_at = UTC_TIMESTAMP(6) ' +
+      'UPDATE category SET is_active = 0, deleted_at = NOW() ' +
       'WHERE category_id = :category_id AND deleted_at IS NULL',
       True
     );
@@ -207,21 +205,6 @@ begin
   finally
     FreeAndNil(LSetClauses);
     FreeAndNil(LDataset);
-  end;
-end;
-
-function TCategoryRepository.HasProductReferences(const ACategoryID: string): Boolean;
-var LQuery: TFDQuery;
-begin
-  LQuery := THelperDatabase.CreateQuery(FConnection);
-  try
-    LQuery.SQL.Text := 'SELECT p.id FROM product p JOIN category c ON c.id=p.category_internal_id '
-      + 'WHERE c.category_id=:id AND p.deleted_at IS NULL LIMIT 1';
-    LQuery.ParamByName('id').AsWideString := ACategoryID;
-    LQuery.Open;
-    Result := not LQuery.IsEmpty;
-  finally
-    FreeAndNil(LQuery);
   end;
 end;
 

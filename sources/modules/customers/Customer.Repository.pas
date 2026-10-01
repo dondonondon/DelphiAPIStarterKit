@@ -1,4 +1,4 @@
-﻿unit Customer.Repository;
+unit Customer.Repository;
 
 interface
 
@@ -15,7 +15,7 @@ type
 
     function CreateCustomer(const ACustomerID: string;
       const ARequest: TCustomerCreateRequest): Integer;
-    function FindCustomerByID(const ACustomerID: string; ALock: Boolean = False): TFDQuery;
+    function FindCustomerByID(const ACustomerID: string): TFDQuery;
     function GetCustomers(const ACustomerID: string = ''): TFDQuery;
     function SoftDeleteCustomer(const ACustomerID: string): Integer;
     function UpdateCustomer(const ARequest: TCustomerUpdateRequest): Integer;
@@ -69,7 +69,7 @@ begin
   end;
 end;
 
-function TCustomerRepository.FindCustomerByID(const ACustomerID: string; ALock: Boolean): TFDQuery;
+function TCustomerRepository.FindCustomerByID(const ACustomerID: string): TFDQuery;
 begin
   Result := THelperDatabase.CreateQuery(FConnection);
   try
@@ -81,7 +81,6 @@ begin
       True
     );
     TQueryFunction.SQLParamByName(Result, 'customer_id', ACustomerID);
-    if ALock then Result.SQL.Add('FOR UPDATE');
     TQueryFunction.SQLOpen(Result);
   except
     Result.Free;
@@ -127,7 +126,7 @@ begin
   try
     TQueryFunction.SQLAdd(
       LDataset,
-      'UPDATE customer SET is_active = 0, deleted_at = UTC_TIMESTAMP(6) ' +
+      'UPDATE customer SET is_active = 0, deleted_at = NOW() ' +
       'WHERE customer_id = :customer_id AND deleted_at IS NULL',
       True
     );

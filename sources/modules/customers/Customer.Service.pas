@@ -1,4 +1,4 @@
-﻿unit Customer.Service;
+unit Customer.Service;
 
 interface
 
@@ -6,14 +6,12 @@ uses
   System.Classes,
   FireDAC.Comp.Client,
   Web.HTTPApp,
-  Customer.Repository, Auth.Repository;
+  Customer.Repository;
 
 type
   TCustomerService = class(TPersistent)
   private
     FConnection: TFDConnection;
-    FRequest: TWebRequest;
-    FSecurity: TAuthRepository;
     FData: TFDMemTable;
     FParts: TArray<string>;
     FRepository: TCustomerRepository;
@@ -21,8 +19,7 @@ type
 
     function ExtractRouteCustomerID(out ACustomerID: string;
       out AMessage: string): Boolean;
-    procedure BeginMutation(const APermission: string);
-    function Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
+    function InternalServerError: string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
       ARequest: TWebRequest; const AParts: TArray<string>);
@@ -40,7 +37,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Auth.Policy, BFA.Security.Token,
+  System.SysUtils,
   Data.DB,
   BFA.Core.Response,
   BFA.Helper.Strings,
@@ -53,8 +50,6 @@ constructor TCustomerService.Create(AConnection: TFDConnection;
 begin
   inherited Create;
   FConnection := AConnection;
-  FRequest := ARequest;
-  FSecurity := TAuthRepository.Create(FConnection);
   FData := AData;
   FParts := AParts;
   FStatusCode := 500;
@@ -62,35 +57,44 @@ begin
 end;
 
 function TCustomerService.Delete: string;
-var LID, LMessage: string; LQuery: TFDQuery; LRows: Integer;
+var
+  LCustomerID: string;
+  LMessage: string;
+  LRowsAffected: Integer;
 begin
-  if not ExtractRouteCustomerID(LID, LMessage) then begin
+  if not ExtractRouteCustomerID(LCustomerID, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  BeginMutation('customers.delete');
+
   try
-    LQuery := FRepository.FindCustomerByID(LID, True);
+    FConnection.StartTransaction;
     try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Customer not found.');
-    finally
-      FreeAndNil(LQuery);
+      LRowsAffected := FRepository.SoftDeleteCustomer(LCustomerID);
+      if LRowsAffected = 0 then begin
+        THelperTransaction.Rollback(FConnection);
+        FStatusCode := 404;
+        Exit(THelperResponse.CreateResponse(FStatusCode, 'Customer not found', FData));
+      end;
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
     end;
-    LRows := FRepository.SoftDeleteCustomer(LID);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    FConnection.Commit;
+
+    FStatusCode := 200;
+    Result := THelperResponse.CreateResponse(FStatusCode, 'Customer deleted', FData);
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
-  FStatusCode := 200;
-  Result := THelperResponse.CreateResponse(200, 'Customer deleted.');
 end;
 
 destructor TCustomerService.Destroy;
 begin
   FreeAndNil(FRepository);
-  FreeAndNil(FSecurity);
   inherited;
 end;
 
@@ -140,66 +144,158 @@ begin
 end;
 
 function TCustomerService.Insert: string;
-var LID, LMessage: string; LRequest: TCustomerCreateRequest; LRows: Integer;
+var
+  LCustomerID: string;
+  LMessage: string;
+  LRequest: TCustomerCreateRequest;
+  LResponseData: string;
 begin
   if not TCustomerValidator.ValidateCreate(FData, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := TGlobalFunction.NewDatabaseUUID;
-  BeginMutation('customers.create');
+
+  LCustomerID := TGlobalFunction.NewDatabaseUUID;
+
   try
-    LRows := FRepository.CreateCustomer(LID, LRequest);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 201, 'Customer created.');
-    FConnection.Commit;
+    FConnection.StartTransaction;
+    try
+      FRepository.CreateCustomer(LCustomerID, LRequest);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
+    end;
+
+    LResponseData := TCustomerDTO.CreateCustomerResponse(
+      LCustomerID,
+      LRequest.CustomerName,
+      LRequest.Email,
+      LRequest.PhoneNumber,
+      LRequest.AddressLine1,
+      LRequest.AddressLine2,
+      LRequest.City,
+      LRequest.State,
+      LRequest.PostalCode,
+      LRequest.Country,
+      LRequest.Notes,
+      LRequest.IsActive
+    );
+    FStatusCode := 201;
+    Result := THelperResponse.CreateResponse(FStatusCode, 'Customer created', LResponseData);
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
 end;
 
-procedure TCustomerService.BeginMutation(const APermission: string);
+function TCustomerService.InternalServerError: string;
 begin
-  FSecurity.BeginAuthorizedTransaction(TSecurityToken.ExtractAccessToken(FRequest), APermission);
-end;
-
-function TCustomerService.Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
-var LQuery: TFDQuery;
-begin
-  LQuery := FRepository.GetCustomers(AID);
-  try
-    if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Customer not found.');
-    FStatusCode := AStatus;
-    Result := THelperResponse.CreateResponse(AStatus, AMessage, LQuery);
-  finally
-    FreeAndNil(LQuery);
-  end;
+  FStatusCode := 500;
+  Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
 end;
 
 function TCustomerService.Update: string;
-var LID, LMessage: string; LRequest: TCustomerUpdateRequest; LRows: Integer; LQuery: TFDQuery;
+var
+  LAddressLine1: string;
+  LAddressLine2: string;
+  LCity: string;
+  LCountry: string;
+  LCustomerName: string;
+  LDataset: TFDQuery;
+  LEmail: string;
+  LIsActive: Integer;
+  LMessage: string;
+  LNotes: string;
+  LPhoneNumber: string;
+  LPostalCode: string;
+  LRequest: TCustomerUpdateRequest;
+  LResponseData: string;
+  LState: string;
 begin
   if not TCustomerValidator.ValidateUpdate(FData, FParts, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := LRequest.CustomerID;
-  BeginMutation('customers.update');
+
+  LDataset := FRepository.FindCustomerByID(LRequest.CustomerID);
   try
-    LQuery := FRepository.FindCustomerByID(LID, True);
-    try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Customer not found.');
-    finally
-      FreeAndNil(LQuery);
+    if LDataset.IsEmpty then begin
+      FStatusCode := 404;
+      Exit(THelperResponse.CreateResponse(FStatusCode, 'Customer not found', FData));
     end;
-    LRows := FRepository.UpdateCustomer(LRequest);
-    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 200, 'Customer updated.');
-    FConnection.Commit;
+
+    LCustomerName := LDataset.FieldByName('customer_name').AsString;
+    LEmail := LDataset.FieldByName('email').AsString;
+    LPhoneNumber := LDataset.FieldByName('phone_number').AsString;
+    LAddressLine1 := LDataset.FieldByName('address_line1').AsString;
+    LAddressLine2 := LDataset.FieldByName('address_line2').AsString;
+    LCity := LDataset.FieldByName('city').AsString;
+    LState := LDataset.FieldByName('state').AsString;
+    LPostalCode := LDataset.FieldByName('postal_code').AsString;
+    LCountry := LDataset.FieldByName('country').AsString;
+    LNotes := LDataset.FieldByName('notes').AsString;
+    LIsActive := LDataset.FieldByName('is_active').AsInteger;
+  finally
+    FreeAndNil(LDataset);
+  end;
+
+  try
+    FConnection.StartTransaction;
+    try
+      FRepository.UpdateCustomer(LRequest);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
+    end;
+
+    if LRequest.HasCustomerName then
+      LCustomerName := LRequest.CustomerName;
+    if LRequest.HasEmail then
+      LEmail := LRequest.Email;
+    if LRequest.HasPhoneNumber then
+      LPhoneNumber := LRequest.PhoneNumber;
+    if LRequest.HasAddressLine1 then
+      LAddressLine1 := LRequest.AddressLine1;
+    if LRequest.HasAddressLine2 then
+      LAddressLine2 := LRequest.AddressLine2;
+    if LRequest.HasCity then
+      LCity := LRequest.City;
+    if LRequest.HasState then
+      LState := LRequest.State;
+    if LRequest.HasPostalCode then
+      LPostalCode := LRequest.PostalCode;
+    if LRequest.HasCountry then
+      LCountry := LRequest.Country;
+    if LRequest.HasNotes then
+      LNotes := LRequest.Notes;
+    if LRequest.HasIsActive then
+      LIsActive := LRequest.IsActive;
+
+    LResponseData := TCustomerDTO.CreateCustomerResponse(
+      LRequest.CustomerID,
+      LCustomerName,
+      LEmail,
+      LPhoneNumber,
+      LAddressLine1,
+      LAddressLine2,
+      LCity,
+      LState,
+      LPostalCode,
+      LCountry,
+      LNotes,
+      LIsActive
+    );
+    FStatusCode := 200;
+    Result := THelperResponse.CreateResponse(FStatusCode, 'Customer updated', LResponseData);
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
 end;
 

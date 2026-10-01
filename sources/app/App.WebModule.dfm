@@ -1,9 +1,7 @@
 object WM: TWM
   OnCreate = WebModuleCreate
-  OnException = WebModuleException
   Actions = <
     item
-      Default = True
       Name = 'DefaultHandler'
       PathInfo = '/'
       OnAction = WebModule1DefaultHandlerAction

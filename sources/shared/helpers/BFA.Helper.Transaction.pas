@@ -13,20 +13,12 @@ type
 
 implementation
 
-uses System.SysUtils, BFA.Logger;
+{ THelperTransaction }
 
 class procedure THelperTransaction.Rollback(AConnection: TFDConnection);
-var LOriginal: TObject;
 begin
-  LOriginal := ExceptObject;
-  try
-    if Assigned(AConnection) and AConnection.InTransaction then AConnection.Rollback;
-  except
-    on E: Exception do begin
-      THelperLogger.RollbackFailed(E);
-      if not Assigned(LOriginal) then raise;
-    end;
-  end;
+  if Assigned(AConnection) and AConnection.InTransaction then
+    AConnection.Rollback;
 end;
 
 end.

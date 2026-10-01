@@ -1,4 +1,4 @@
-﻿unit Product.Service;
+unit Product.Service;
 
 interface
 
@@ -6,14 +6,12 @@ uses
   System.Classes,
   FireDAC.Comp.Client,
   Web.HTTPApp,
-  Product.Repository, Auth.Repository;
+  Product.Repository;
 
 type
   TProductService = class(TPersistent)
   private
     FConnection: TFDConnection;
-    FRequest: TWebRequest;
-    FSecurity: TAuthRepository;
     FData: TFDMemTable;
     FParts: TArray<string>;
     FRepository: TProductRepository;
@@ -21,8 +19,7 @@ type
 
     function ExtractRouteProductID(out AProductID: string;
       out AMessage: string): Boolean;
-    procedure BeginMutation(const APermission: string);
-    function Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
+    function InternalServerError: string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
       ARequest: TWebRequest; const AParts: TArray<string>);
@@ -40,7 +37,7 @@ type
 implementation
 
 uses
-  System.SysUtils, Auth.Policy, BFA.Security.Token,
+  System.SysUtils,
   System.Variants,
   Data.DB,
   BFA.Core.Response,
@@ -54,8 +51,6 @@ constructor TProductService.Create(AConnection: TFDConnection;
 begin
   inherited Create;
   FConnection := AConnection;
-  FRequest := ARequest;
-  FSecurity := TAuthRepository.Create(FConnection);
   FData := AData;
   FParts := AParts;
   FStatusCode := 500;
@@ -63,35 +58,44 @@ begin
 end;
 
 function TProductService.Delete: string;
-var LID, LMessage: string; LQuery: TFDQuery; LRows: Integer;
+var
+  LMessage: string;
+  LProductID: string;
+  LRowsAffected: Integer;
 begin
-  if not ExtractRouteProductID(LID, LMessage) then begin
+  if not ExtractRouteProductID(LProductID, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  BeginMutation('products.delete');
+
   try
-    LQuery := FRepository.FindProductByID(LID, True);
+    FConnection.StartTransaction;
     try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Product not found.');
-    finally
-      FreeAndNil(LQuery);
+      LRowsAffected := FRepository.SoftDeleteProduct(LProductID);
+      if LRowsAffected = 0 then begin
+        THelperTransaction.Rollback(FConnection);
+        FStatusCode := 404;
+        Exit(THelperResponse.CreateResponse(FStatusCode, 'Product not found', FData));
+      end;
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
     end;
-    LRows := FRepository.SoftDeleteProduct(LID);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    FConnection.Commit;
+
+    FStatusCode := 200;
+    Result := THelperResponse.CreateResponse(FStatusCode, 'Product deleted', FData);
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
-  FStatusCode := 200;
-  Result := THelperResponse.CreateResponse(200, 'Product deleted.');
 end;
 
 destructor TProductService.Destroy;
 begin
   FreeAndNil(FRepository);
-  FreeAndNil(FSecurity);
   inherited;
 end;
 
@@ -141,86 +145,184 @@ begin
 end;
 
 function TProductService.Insert: string;
-var LID, LMessage: string; LRequest: TProductCreateRequest; LRows: Integer; LCategory: Variant; LQuery: TFDQuery;
+var
+  LCategoryID: string;
+  LCategoryInternalID: Variant;
+  LCategoryName: string;
+  LDataset: TFDQuery;
+  LMessage: string;
+  LProductID: string;
+  LRequest: TProductCreateRequest;
+  LResponseData: TStringList;
 begin
   if not TProductValidator.ValidateCreate(FData, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := TGlobalFunction.NewDatabaseUUID;
-  BeginMutation('products.create');
+
+  LProductID := TGlobalFunction.NewDatabaseUUID;
+  LCategoryInternalID := Null;
+  LCategoryID := '';
+  LCategoryName := '';
+
+  if LRequest.HasCategoryID and (LRequest.CategoryID <> '') then begin
+    LDataset := FRepository.FindCategoryByID(LRequest.CategoryID);
+    try
+      if LDataset.IsEmpty then begin
+        FStatusCode := 404;
+        Exit(THelperResponse.CreateResponse(FStatusCode, 'Category not found', FData));
+      end;
+
+      LCategoryInternalID := LDataset.FieldByName('id').Value;
+      LCategoryID := LDataset.FieldByName('category_id').AsString;
+      LCategoryName := LDataset.FieldByName('category_name').AsString;
+    finally
+      FreeAndNil(LDataset);
+    end;
+  end;
+
   try
-    LCategory := Null;
-    if LRequest.HasCategoryID and (LRequest.CategoryID <> '') then begin
-      LQuery := FRepository.FindCategoryByID(LRequest.CategoryID, True);
-      try
-        if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Active category not found.');
-        LCategory := LQuery.FieldByName('id').AsLargeInt;
-      finally
-        FreeAndNil(LQuery);
+    FConnection.StartTransaction;
+    try
+      FRepository.CreateProduct(LProductID, LRequest, LCategoryInternalID);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
       end;
     end;
-    LRows := FRepository.CreateProduct(LID, LRequest, LCategory);
-    if LRows <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 201, 'Product created.');
-    FConnection.Commit;
+
+    LResponseData := TProductDTO.CreateProductResponse(
+      LProductID,
+      LRequest.ProductName,
+      LRequest.Description,
+      LRequest.Price,
+      LRequest.Stock,
+      LCategoryID,
+      LCategoryName,
+      LRequest.IsActive
+    );
+    try
+      FStatusCode := 201;
+      Result := THelperResponse.CreateResponse(FStatusCode, 'Product created', LResponseData);
+    finally
+      FreeAndNil(LResponseData);
+    end;
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
 end;
 
-procedure TProductService.BeginMutation(const APermission: string);
+function TProductService.InternalServerError: string;
 begin
-  FSecurity.BeginAuthorizedTransaction(TSecurityToken.ExtractAccessToken(FRequest), APermission);
-end;
-
-function TProductService.Reply(const AID: string; AStatus: Integer; const AMessage: string): string;
-var LQuery: TFDQuery;
-begin
-  LQuery := FRepository.GetProducts(AID);
-  try
-    if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Product not found.');
-    FStatusCode := AStatus;
-    Result := THelperResponse.CreateResponse(AStatus, AMessage, LQuery);
-  finally
-    FreeAndNil(LQuery);
-  end;
+  FStatusCode := 500;
+  Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
 end;
 
 function TProductService.Update: string;
-var LID, LMessage: string; LRequest: TProductUpdateRequest; LRows: Integer; LQuery: TFDQuery; LCategory: Variant;
+var
+  LCategoryID: string;
+  LCategoryInternalID: Variant;
+  LCategoryName: string;
+  LDataset: TFDQuery;
+  LDescription: string;
+  LIsActive: Integer;
+  LMessage: string;
+  LPrice: Currency;
+  LProductName: string;
+  LRequest: TProductUpdateRequest;
+  LResponseData: TStringList;
+  LStock: Integer;
 begin
   if not TProductValidator.ValidateUpdate(FData, FParts, LRequest, LMessage) then begin
     FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(400, LMessage));
+    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
   end;
-  LID := LRequest.ProductID;
-  BeginMutation('products.update');
+
+  LDataset := FRepository.FindProductByID(LRequest.ProductID);
   try
-    LQuery := FRepository.FindProductByID(LID, True);
-    try
-      if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Product not found.');
-    finally
-      FreeAndNil(LQuery);
+    if LDataset.IsEmpty then begin
+      FStatusCode := 404;
+      Exit(THelperResponse.CreateResponse(FStatusCode, 'Product not found', FData));
     end;
-    LCategory := Null;
-    if LRequest.HasCategoryID and (LRequest.CategoryID <> '') then begin
-      LQuery := FRepository.FindCategoryByID(LRequest.CategoryID, True);
+
+    LProductName := LDataset.FieldByName('product_name').AsString;
+    LDescription := LDataset.FieldByName('description').AsString;
+    LPrice := LDataset.FieldByName('price').AsCurrency;
+    LStock := LDataset.FieldByName('stock').AsInteger;
+    LCategoryID := LDataset.FieldByName('category_id').AsString;
+    LCategoryName := LDataset.FieldByName('category_name').AsString;
+    LIsActive := LDataset.FieldByName('is_active').AsInteger;
+  finally
+    FreeAndNil(LDataset);
+  end;
+
+  LCategoryInternalID := Null;
+  if LRequest.HasCategoryID then begin
+    if LRequest.CategoryID = '' then begin
+      LCategoryID := '';
+      LCategoryName := '';
+    end else begin
+      LDataset := FRepository.FindCategoryByID(LRequest.CategoryID);
       try
-        if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'Active category not found.');
-        LCategory := LQuery.FieldByName('id').AsLargeInt;
+        if LDataset.IsEmpty then begin
+          FStatusCode := 404;
+          Exit(THelperResponse.CreateResponse(FStatusCode, 'Category not found', FData));
+        end;
+
+        LCategoryInternalID := LDataset.FieldByName('id').Value;
+        LCategoryID := LDataset.FieldByName('category_id').AsString;
+        LCategoryName := LDataset.FieldByName('category_name').AsString;
       finally
-        FreeAndNil(LQuery);
+        FreeAndNil(LDataset);
       end;
     end;
-    LRows := FRepository.UpdateProduct(LRequest, LCategory);
-    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
-    Result := Reply(LID, 200, 'Product updated.');
-    FConnection.Commit;
+  end;
+
+  try
+    FConnection.StartTransaction;
+    try
+      FRepository.UpdateProduct(LRequest, LCategoryInternalID);
+      FConnection.Commit;
+    except
+      on E: Exception do begin
+        THelperTransaction.Rollback(FConnection);
+        Exit(InternalServerError);
+      end;
+    end;
+
+    if LRequest.HasProductName then
+      LProductName := LRequest.ProductName;
+    if LRequest.HasDescription then
+      LDescription := LRequest.Description;
+    if LRequest.HasPrice then
+      LPrice := LRequest.Price;
+    if LRequest.HasStock then
+      LStock := LRequest.Stock;
+    if LRequest.HasIsActive then
+      LIsActive := LRequest.IsActive;
+
+    LResponseData := TProductDTO.CreateProductResponse(
+      LRequest.ProductID,
+      LProductName,
+      LDescription,
+      LPrice,
+      LStock,
+      LCategoryID,
+      LCategoryName,
+      LIsActive
+    );
+    try
+      FStatusCode := 200;
+      Result := THelperResponse.CreateResponse(FStatusCode, 'Product updated', LResponseData);
+    finally
+      FreeAndNil(LResponseData);
+    end;
   except
-    THelperTransaction.Rollback(FConnection);
-    raise;
+    on E: Exception do
+      Result := InternalServerError;
   end;
 end;
 
