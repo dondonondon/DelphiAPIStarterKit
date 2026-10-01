@@ -47,6 +47,7 @@ print('PASS active/deleted names reserved / category rename / concurrent categor
 
 def await_lock(blocking_id,future):
  deadline=time.monotonic()+8
+ time.sleep(.25)
  with connect(root=True) as c,c.cursor() as q:
   while time.monotonic()<deadline:
    q.execute("SELECT trx_query FROM information_schema.innodb_trx "
@@ -55,7 +56,7 @@ def await_lock(blocking_id,future):
    if future.done():
     response=future.result()[0]
     raise AssertionError(('Request completed before the barrier',response.status_code,response.json()['messages']))
-   time.sleep(.02)
+   time.sleep(.25)
  raise AssertionError('Expected request lock wait behind the controlled transaction not observed')
 for resource,table,key,body,create in [('User','users','user_id',{'fullname':'new'},user),('Product','product','product_id',{'stock':9},product),('Category','category','category_id',{'description':'new'},category),
  ('Customer','customer','customer_id',{'city':'new'},lambda: req('POST','/Customer',{'customer_name':'barrier'},status=201)[1][0]['customer_id'])]:

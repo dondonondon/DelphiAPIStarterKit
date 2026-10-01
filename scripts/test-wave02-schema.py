@@ -24,11 +24,11 @@ with c.cursor() as q:
  for schema,filename in zip(schemas,['demo_delphirest.sql','demo_delphirest_withdatasample.sql']):
   q.execute(f'CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');q.execute(f'USE `{schema}`')
   execute_file(q,root/'assets/databases'/filename,schema)
- baseline,sample=(definitions(q,x) for x in schemas);assert baseline==sample and len(baseline)==12
+ baseline,sample=(definitions(q,x) for x in schemas);assert baseline==sample and len(baseline)==13
  for schema in schemas:
-  for table in ['users','user_session','auth_access_token','auth_refresh_token','password_reset_token']:
+  for table in ['users','user_session','access_token','refresh_token','password_reset_token']:
    q.execute(f'SELECT COUNT(*) FROM `{schema}`.`{table}`');assert q.fetchone()[0]==0
- print('PASS alternative baseline/sample fresh-empty import / identical12 table DDL / no seeded credentials')
+ print('PASS alternative baseline/sample fresh-empty import / identical13 table DDL / no seeded credentials')
  q.execute(f'USE `{schemas[0]}`')
  q.execute('ALTER TABLE product DROP CONSTRAINT ck_product_price_nonnegative,DROP CONSTRAINT ck_product_stock_nonnegative')
  execute_file(q,root/'assets/databases/wave02-domain-upgrade-20261002.sql',schemas[0])
