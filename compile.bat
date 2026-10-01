@@ -3,7 +3,6 @@ setlocal
 
 set "ROOT=%~dp0"
 set "PROJECT=DelphiAPIStarterKit.dproj"
-set "APP_EXE=DelphiAPIStarterKit.exe"
 
 if not defined BUILD_CONFIG set "BUILD_CONFIG=Debug"
 if not defined BUILD_PLATFORM set "BUILD_PLATFORM=Win32"
@@ -21,11 +20,6 @@ if not defined DELPHI_RSVARS (
 )
 
 if not exist "%DELPHI_RSVARS%" goto MissingRsvars
-
-tasklist /FI "IMAGENAME eq %APP_EXE%" | findstr /I "%APP_EXE%" >nul
-if %ERRORLEVEL% equ 0 (
-    taskkill /F /IM "%APP_EXE%"
-)
 
 call "%DELPHI_RSVARS%"
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DelphiAPIStarterKit Orchestrator"
+  short_description: "Coordinate scoped Delphi work with verified evidence"
+  default_prompt: "Use $project-orchestrator to complete the requested DelphiAPIStarterKit task and record its validation."

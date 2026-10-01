@@ -2,288 +2,75 @@
 
 interface
 
-uses
-  Data.DB,
-  FireDAC.Comp.Client,
-  User.DTO;
+uses System.JSON, FireDAC.Comp.Client, Auth.Repository, User.DTO;
 
 type
-  TUserRepository = class
-  private
-    FConnection: TFDConnection;
+  TUserRepository = class(TAuthRepository)
   public
-    constructor Create(AConnection: TFDConnection);
-
-    function FindActiveUserByID(const AUserID: string): TFDQuery;
-    function FindAuthUserByTokenHash(const ATokenHash: string): TFDQuery;
     function FindUserByID(const AUserID: string): TFDQuery;
-    function FindUserByUsername(const AUsername: string): TFDQuery;
-    function GetUsers(const AUserID: string = ''): TFDQuery;
-
-    function CreateUser(const AUserID: string;
-      const ARequest: TUserCreateRequest; const APasswordHash: string): Integer;
-    function SoftDeleteUser(const AUserID: string): Integer;
-    function UpdatePassword(const AUserID, APasswordHash: string): Integer;
-    function UpdateUser(const ARequest: TUserUpdateRequest;
-      const APasswordHash: string): Integer;
+    function GetUsers(const AUserID: string; ALimit, AOffset: Integer): TJSONArray;
+    function CreateUser(const AUserID: string; const ARequest: TUserCreateRequest; const AHash: string): Int64;
+    procedure UpdateUser(const ARequest: TUserUpdateRequest);
+    procedure SoftDeleteUser(AID: Int64);
   end;
 
 implementation
 
-uses
-  System.Classes,
-  System.SysUtils,
-  DB.Helper.Query;
-
-constructor TUserRepository.Create(AConnection: TFDConnection);
-begin
-  inherited Create;
-  FConnection := AConnection;
-end;
-
-function TUserRepository.CreateUser(const AUserID: string;
-  const ARequest: TUserCreateRequest; const APasswordHash: string): Integer;
-var
-  LDataset: TFDQuery;
-begin
-  LDataset := THelperDatabase.CreateQuery(FConnection);
-  try
-    if ARequest.HasRoleID then begin
-      TQueryFunction.SQLAdd(
-        LDataset,
-        'INSERT INTO users ' +
-        '(user_id, username, password_hash, fullname, is_active, role_internal_id) ' +
-        'VALUES (:user_id, :username, :password_hash, :fullname, :is_active, :role_id)',
-        True
-      );
-      TQueryFunction.SQLParamByName(LDataset, 'role_id', ARequest.RoleID);
-    end else begin
-      TQueryFunction.SQLAdd(
-        LDataset,
-        'INSERT INTO users ' +
-        '(user_id, username, password_hash, fullname, is_active) ' +
-        'VALUES (:user_id, :username, :password_hash, :fullname, :is_active)',
-        True
-      );
-    end;
-
-    TQueryFunction.SQLParamByName(LDataset, 'user_id', AUserID);
-    TQueryFunction.SQLParamByName(LDataset, 'username', ARequest.Username);
-    TQueryFunction.SQLParamByName(LDataset, 'password_hash', APasswordHash);
-    TQueryFunction.SQLParamByName(LDataset, 'fullname', ARequest.Fullname);
-    TQueryFunction.SQLParamByName(LDataset, 'is_active', ARequest.IsActive);
-    TQueryFunction.ExecSQL(LDataset);
-    Result := LDataset.RowsAffected;
-  finally
-    FreeAndNil(LDataset);
-  end;
-end;
-
-function TUserRepository.FindActiveUserByID(const AUserID: string): TFDQuery;
-begin
-  Result := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      Result,
-      'SELECT user_id, password_hash FROM users ' +
-      'WHERE user_id = :uid AND is_active = 1 AND deleted_at IS NULL',
-      True
-    );
-    TQueryFunction.SQLParamByName(Result, 'uid', AUserID);
-    TQueryFunction.SQLOpen(Result);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-function TUserRepository.FindAuthUserByTokenHash(
-  const ATokenHash: string): TFDQuery;
-begin
-  Result := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      Result,
-      'SELECT u.user_id ' +
-      'FROM access_token at ' +
-      'INNER JOIN user_session us ON us.id = at.session_internal_id ' +
-      'INNER JOIN users u ON u.id = us.user_internal_id ' +
-      'WHERE at.token_hash = :hash ' +
-      'AND at.revoked = 0 ' +
-      'AND at.expires_at > NOW() ' +
-      'AND at.deleted_at IS NULL ' +
-      'AND us.revoked = 0 ' +
-      'AND us.expires_at > NOW() ' +
-      'AND us.deleted_at IS NULL ' +
-      'AND u.deleted_at IS NULL ' +
-      'ORDER BY at.id DESC LIMIT 1',
-      True
-    );
-    TQueryFunction.SQLParamByName(Result, 'hash', ATokenHash);
-    TQueryFunction.SQLOpen(Result);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
+uses System.SysUtils, System.Variants, Auth.Policy;
 
 function TUserRepository.FindUserByID(const AUserID: string): TFDQuery;
 begin
-  Result := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      Result,
-      'SELECT user_id, username, password_hash, fullname, is_active, role_internal_id ' +
-      'FROM users WHERE user_id = :uid AND deleted_at IS NULL',
-      True
-    );
-    TQueryFunction.SQLParamByName(Result, 'uid', AUserID);
-    TQueryFunction.SQLOpen(Result);
-  except
-    Result.Free;
-    raise;
-  end;
+  Result := Query('SELECT * FROM users WHERE user_id=:id AND deleted_at IS NULL', ['id', AUserID]);
 end;
 
-function TUserRepository.FindUserByUsername(const AUsername: string): TFDQuery;
+function TUserRepository.GetUsers(const AUserID: string; ALimit, AOffset: Integer): TJSONArray;
 begin
-  Result := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      Result,
-      'SELECT user_id FROM users WHERE username = :username AND deleted_at IS NULL',
-      True
-    );
-    TQueryFunction.SQLParamByName(Result, 'username', AUsername);
-    TQueryFunction.SQLOpen(Result);
-  except
-    Result.Free;
-    raise;
-  end;
+  Result := JSONRows('SELECT u.user_id,u.username,u.fullname,u.is_active,u.role_internal_id AS role_id,'
+    + 'u.must_change_password,r.role_code FROM users u LEFT JOIN m_role r ON r.id=u.role_internal_id '
+    + 'WHERE u.deleted_at IS NULL AND (:uid='''' OR u.user_id=:uid) ORDER BY u.id LIMIT :lim OFFSET :off',
+    ['uid', AUserID, 'lim', ALimit, 'off', AOffset]);
 end;
 
-function TUserRepository.GetUsers(const AUserID: string): TFDQuery;
+function TUserRepository.CreateUser(const AUserID: string; const ARequest: TUserCreateRequest; const AHash: string): Int64;
+var LRole: Variant; LQuery: TFDQuery;
 begin
-  Result := THelperDatabase.CreateQuery(FConnection);
+  LRole := Null;
+  if ARequest.RoleID > 0 then LRole := ARequest.RoleID;
+  Execute('INSERT INTO users(user_id,username,password_hash,fullname,is_active,role_internal_id,must_change_password) '
+    + 'VALUES(:uid,:username,:hash,:name,:active,:role,1)', ['uid', AUserID, 'username', ARequest.Username,
+    'hash', AHash, 'name', ARequest.Fullname, 'active', ARequest.IsActive, 'role', LRole]);
+  LQuery := Query('SELECT LAST_INSERT_ID()', []);
   try
-    if AUserID <> '' then begin
-      TQueryFunction.SQLAdd(
-        Result,
-        'SELECT user_id, username, fullname, is_active, role_internal_id, created_at ' +
-        'FROM users WHERE user_id = :uid AND deleted_at IS NULL',
-        True
-      );
-      TQueryFunction.SQLParamByName(Result, 'uid', AUserID);
-    end else begin
-      TQueryFunction.SQLAdd(
-        Result,
-        'SELECT user_id, username, fullname, is_active, role_internal_id, created_at ' +
-        'FROM users WHERE deleted_at IS NULL ORDER BY created_at DESC, username ASC',
-        True
-      );
-    end;
-    TQueryFunction.SQLOpen(Result);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
-
-function TUserRepository.SoftDeleteUser(const AUserID: string): Integer;
-var
-  LDataset: TFDQuery;
-begin
-  LDataset := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      LDataset,
-      'UPDATE users SET is_active = 0, deleted_at = NOW() WHERE user_id = :uid AND deleted_at IS NULL',
-      True
-    );
-    TQueryFunction.SQLParamByName(LDataset, 'uid', AUserID);
-    TQueryFunction.ExecSQL(LDataset);
-    Result := LDataset.RowsAffected;
+    Result := LQuery.Fields[0].AsLargeInt;
   finally
-    FreeAndNil(LDataset);
+    FreeAndNil(LQuery);
   end;
 end;
 
-function TUserRepository.UpdatePassword(const AUserID,
-  APasswordHash: string): Integer;
-var
-  LDataset: TFDQuery;
+procedure TUserRepository.UpdateUser(const ARequest: TUserUpdateRequest);
+var LRole: Variant; LRows: Integer;
 begin
-  LDataset := THelperDatabase.CreateQuery(FConnection);
-  try
-    TQueryFunction.SQLAdd(
-      LDataset,
-      'UPDATE users SET password_hash = :password_hash WHERE user_id = :uid AND deleted_at IS NULL',
-      True
-    );
-    TQueryFunction.SQLParamByName(LDataset, 'password_hash', APasswordHash);
-    TQueryFunction.SQLParamByName(LDataset, 'uid', AUserID);
-    TQueryFunction.ExecSQL(LDataset);
-    Result := LDataset.RowsAffected;
-  finally
-    FreeAndNil(LDataset);
+  if ARequest.HasFullname then begin
+    LRows := Execute('UPDATE users SET fullname=:value WHERE user_id=:id',
+    ['value', ARequest.Fullname, 'id', ARequest.UserID]);
+    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
+  end;
+  if ARequest.HasIsActive then begin
+    LRows := Execute('UPDATE users SET is_active=:value WHERE user_id=:id',
+    ['value', ARequest.IsActive, 'id', ARequest.UserID]);
+    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
+  end;
+  if ARequest.HasRoleID then begin
+    LRole := Null;
+    if ARequest.RoleID > 0 then LRole := ARequest.RoleID;
+    LRows := Execute('UPDATE users SET role_internal_id=:value WHERE user_id=:id', ['value', LRole, 'id', ARequest.UserID]);
+    if (LRows < 0) or (LRows > 1) then raise EAuthPolicy.Create(409, 'Mutation conflict.');
   end;
 end;
 
-function TUserRepository.UpdateUser(const ARequest: TUserUpdateRequest;
-  const APasswordHash: string): Integer;
-var
-  I: Integer;
-  LDataset: TFDQuery;
-  LSetSQL: string;
-  LSetClauses: TStringList;
+procedure TUserRepository.SoftDeleteUser(AID: Int64);
 begin
-  LDataset := THelperDatabase.CreateQuery(FConnection);
-  LSetClauses := TStringList.Create;
-  try
-    if ARequest.HasPassword then
-      LSetClauses.Add('password_hash = :password_hash');
-
-    if ARequest.HasFullname then
-      LSetClauses.Add('fullname = :fullname');
-
-    if ARequest.HasIsActive then
-      LSetClauses.Add('is_active = :is_active');
-
-    if ARequest.HasRoleID then
-      LSetClauses.Add('role_internal_id = :role_id');
-
-    LSetSQL := '';
-    for I := 0 to LSetClauses.Count - 1 do begin
-      if LSetSQL <> '' then
-        LSetSQL := LSetSQL + ', ';
-      LSetSQL := LSetSQL + LSetClauses[I];
-    end;
-
-    TQueryFunction.SQLAdd(
-      LDataset,
-      'UPDATE users SET ' + LSetSQL + ' WHERE user_id = :uid AND deleted_at IS NULL',
-      True
-    );
-
-    if ARequest.HasPassword then
-      TQueryFunction.SQLParamByName(LDataset, 'password_hash', APasswordHash);
-
-    if ARequest.HasFullname then
-      TQueryFunction.SQLParamByName(LDataset, 'fullname', ARequest.Fullname);
-
-    if ARequest.HasIsActive then
-      TQueryFunction.SQLParamByName(LDataset, 'is_active', ARequest.IsActive);
-
-    if ARequest.HasRoleID then
-      TQueryFunction.SQLParamByName(LDataset, 'role_id', ARequest.RoleID);
-
-    TQueryFunction.SQLParamByName(LDataset, 'uid', ARequest.UserID);
-    TQueryFunction.ExecSQL(LDataset);
-    Result := LDataset.RowsAffected;
-  finally
-    FreeAndNil(LSetClauses);
-    FreeAndNil(LDataset);
-  end;
+  if Execute('UPDATE users SET deleted_at=UTC_TIMESTAMP(6),is_active=0 WHERE id=:id AND deleted_at IS NULL', ['id', AID]) <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
 end;
 
 end.

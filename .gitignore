@@ -35,12 +35,48 @@ __history/
 __recovery/
 *.~*
 
+# Delphi platform build output (including extensionless Linux executables)
+/Win32/
+/Win64/
+/Win64x/
+/Linux64/
+
+# Local build archives and diagnostics
+/bin/*.rar
+/bin/*.zip
+/bin/*.7z
+/bin/logs/
+/logs/
+*.log
+*.binlog
+
+# Python tooling caches
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # Castalia statistics (since XE7)
 *.stat
 
 # Local runtime configuration and secrets
 config.ini
 .env
+.env.*
+!.env.example
+!.env.*.example
+config.local.ini
+config.*.local.ini
+/secrets/
+*.pfx
+*.p12
+*.key
+
+# Local orchestrator checkpoints and tool output
+/.ai/runs/
+/.ai/cache/
+
+# Local bootstrap reference replaced by the project-specific skill package
+/initialize-ai-agent-system-codex-copilot.md
 
 # Repository-specific ignores
 /docs/*
@@ -75,3 +111,6 @@ sources/infrastructure/logging/.gitkeep
 !/docs/databases/
 !/docs/information/
 !/docs/api/
+!/docs/bugs/
+!/docs/bugs/*.md
+!/docs/workflows/

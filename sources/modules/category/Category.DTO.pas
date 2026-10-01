@@ -1,4 +1,4 @@
-unit Category.DTO;
+﻿unit Category.DTO;
 
 interface
 
@@ -27,9 +27,13 @@ type
   public
     class function CreateCategoryResponse(const ACategoryID, ACategoryName,
       ADescription: string; AIsActive: Integer): TStringList;
+    class function CreateCategoryJSONResponse(const ACategoryID, ACategoryName,
+      ADescription: string; AIsActive: Integer): string;
   end;
 
 implementation
+
+uses System.JSON;
 
 class function TCategoryDTO.CreateCategoryResponse(const ACategoryID,
   ACategoryName, ADescription: string; AIsActive: Integer): TStringList;
@@ -43,6 +47,22 @@ begin
   except
     FreeAndNil(Result);
     raise;
+  end;
+end;
+
+class function TCategoryDTO.CreateCategoryJSONResponse(const ACategoryID, ACategoryName,
+  ADescription: string; AIsActive: Integer): string;
+var LObject: TJSONObject;
+begin
+  LObject := TJSONObject.Create;
+  try
+    LObject.AddPair('category_id', ACategoryID);
+    LObject.AddPair('category_name', ACategoryName);
+    LObject.AddPair('description', ADescription);
+    LObject.AddPair('is_active', TJSONBool.Create(AIsActive = 1));
+    Result := LObject.ToJSON;
+  finally
+    FreeAndNil(LObject);
   end;
 end;
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Delphi API Project"
+  short_description: "Validate Delphi builds with target and safety checks"
+  default_prompt: "Use $delphi-build to validate the requested DelphiAPIStarterKit build target after checking its prerequisites."

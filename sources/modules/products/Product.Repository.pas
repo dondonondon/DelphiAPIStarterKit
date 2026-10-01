@@ -1,4 +1,4 @@
-unit Product.Repository;
+﻿unit Product.Repository;
 
 interface
 
@@ -11,14 +11,15 @@ type
   TProductRepository = class
   private
     FConnection: TFDConnection;
+    procedure SetCategoryParameter(AQuery: TFDQuery; const AValue: Variant);
   public
     constructor Create(AConnection: TFDConnection);
 
     function CreateProduct(const AProductID: string;
       const ARequest: TProductCreateRequest;
       const ACategoryInternalID: Variant): Integer;
-    function FindCategoryByID(const ACategoryID: string): TFDQuery;
-    function FindProductByID(const AProductID: string): TFDQuery;
+    function FindCategoryByID(const ACategoryID: string; ALock: Boolean = False): TFDQuery;
+    function FindProductByID(const AProductID: string; ALock: Boolean = False): TFDQuery;
     function GetProducts(const AProductID: string = ''): TFDQuery;
     function SoftDeleteProduct(const AProductID: string): Integer;
     function UpdateProduct(const ARequest: TProductUpdateRequest;
@@ -29,6 +30,7 @@ implementation
 
 uses
   System.Classes,
+  Data.DB,
   System.SysUtils,
   DB.Helper.Query;
 
@@ -36,6 +38,15 @@ constructor TProductRepository.Create(AConnection: TFDConnection);
 begin
   inherited Create;
   FConnection := AConnection;
+end;
+
+procedure TProductRepository.SetCategoryParameter(AQuery: TFDQuery; const AValue: Variant);
+begin
+  AQuery.ParamByName('category_internal_id').DataType := ftLargeint;
+  if VarIsNull(AValue) then
+    AQuery.ParamByName('category_internal_id').Clear
+  else
+    AQuery.ParamByName('category_internal_id').AsLargeInt := AValue;
 end;
 
 function TProductRepository.CreateProduct(const AProductID: string;
@@ -58,7 +69,7 @@ begin
     TQueryFunction.SQLParamByName(LDataset, 'description', ARequest.Description);
     TQueryFunction.SQLParamByName(LDataset, 'price', ARequest.Price);
     TQueryFunction.SQLParamByName(LDataset, 'stock', ARequest.Stock);
-    TQueryFunction.SQLParamByName(LDataset, 'category_internal_id', ACategoryInternalID);
+    SetCategoryParameter(LDataset, ACategoryInternalID);
     TQueryFunction.SQLParamByName(LDataset, 'is_active', ARequest.IsActive);
     TQueryFunction.ExecSQL(LDataset);
     Result := LDataset.RowsAffected;
@@ -67,17 +78,18 @@ begin
   end;
 end;
 
-function TProductRepository.FindCategoryByID(const ACategoryID: string): TFDQuery;
+function TProductRepository.FindCategoryByID(const ACategoryID: string; ALock: Boolean): TFDQuery;
 begin
   Result := THelperDatabase.CreateQuery(FConnection);
   try
     TQueryFunction.SQLAdd(
       Result,
       'SELECT id, category_id, category_name FROM category ' +
-      'WHERE category_id = :category_id AND deleted_at IS NULL',
+      'WHERE category_id = :category_id AND is_active=1 AND deleted_at IS NULL',
       True
     );
     TQueryFunction.SQLParamByName(Result, 'category_id', ACategoryID);
+    if ALock then Result.SQL.Add('FOR UPDATE');
     TQueryFunction.SQLOpen(Result);
   except
     Result.Free;
@@ -85,7 +97,7 @@ begin
   end;
 end;
 
-function TProductRepository.FindProductByID(const AProductID: string): TFDQuery;
+function TProductRepository.FindProductByID(const AProductID: string; ALock: Boolean): TFDQuery;
 begin
   Result := THelperDatabase.CreateQuery(FConnection);
   try
@@ -94,11 +106,12 @@ begin
       'SELECT p.product_id, p.product_name, p.description, p.price, p.stock, ' +
       'c.category_id, c.category_name, p.is_active, p.created_at ' +
       'FROM product p ' +
-      'LEFT JOIN category c ON c.id = p.category_internal_id ' +
+      'LEFT JOIN category c ON c.id = p.category_internal_id AND c.deleted_at IS NULL ' +
       'WHERE p.product_id = :product_id AND p.deleted_at IS NULL',
       True
     );
     TQueryFunction.SQLParamByName(Result, 'product_id', AProductID);
+    if ALock then Result.SQL.Add('FOR UPDATE');
     TQueryFunction.SQLOpen(Result);
   except
     Result.Free;
@@ -116,7 +129,7 @@ begin
         'SELECT p.product_id, p.product_name, p.description, p.price, p.stock, ' +
         'c.category_id, c.category_name, p.is_active, p.created_at ' +
         'FROM product p ' +
-        'LEFT JOIN category c ON c.id = p.category_internal_id ' +
+        'LEFT JOIN category c ON c.id = p.category_internal_id AND c.deleted_at IS NULL ' +
         'WHERE p.product_id = :product_id AND p.deleted_at IS NULL',
         True
       );
@@ -127,7 +140,7 @@ begin
         'SELECT p.product_id, p.product_name, p.description, p.price, p.stock, ' +
         'c.category_id, c.category_name, p.is_active, p.created_at ' +
         'FROM product p ' +
-        'LEFT JOIN category c ON c.id = p.category_internal_id ' +
+        'LEFT JOIN category c ON c.id = p.category_internal_id AND c.deleted_at IS NULL ' +
         'WHERE p.deleted_at IS NULL ORDER BY p.created_at DESC, p.product_name ASC',
         True
       );
@@ -148,7 +161,7 @@ begin
   try
     TQueryFunction.SQLAdd(
       LDataset,
-      'UPDATE product SET is_active = 0, deleted_at = NOW() ' +
+      'UPDATE product SET is_active = 0, deleted_at = UTC_TIMESTAMP(6) ' +
       'WHERE product_id = :product_id AND deleted_at IS NULL',
       True
     );
@@ -216,7 +229,7 @@ begin
       TQueryFunction.SQLParamByName(LDataset, 'stock', ARequest.Stock);
 
     if ARequest.HasCategoryID then
-      TQueryFunction.SQLParamByName(LDataset, 'category_internal_id', ACategoryInternalID);
+      SetCategoryParameter(LDataset, ACategoryInternalID);
 
     if ARequest.HasIsActive then
       TQueryFunction.SQLParamByName(LDataset, 'is_active', ARequest.IsActive);

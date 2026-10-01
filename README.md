@@ -109,6 +109,10 @@ Use `config.example.ini` as the template. Do not commit your real `config.ini`.
 
 ### Import Schema via MySQL CLI
 
+The SQL files now describe the [auth-v2 target contract](docs/bugs/auth-production-contract-2026-10-01.md).
+The current Pascal authentication must be upgraded before using this schema with the server. Both SQL files
+are alternatives for a fresh empty database; neither is an upgrade script or contains a default login account.
+
 Create the database:
 
 ```bat
@@ -141,32 +145,15 @@ cmd /c "mysql -u root -p demo_delphirest < assets\databases\demo_delphirest.sql"
 - The sample schema targets MySQL/MariaDB with InnoDB and `utf8mb4`.
 - During setup, the database account needs permission to create/import tables.
 - At runtime, use a dedicated application account with only the required CRUD permissions for the application database.
-- The schema file creates tables only. If you need test login data, insert a demo role and user that match your configured `DELPHI_API_HMAC_SECRET`.
+- The baseline contains DDL only. The full sample import adds generic roles, permissions and business data, without login credentials. Source implements offline bootstrap and finite legacy HMAC migration; see docs/api/auth.md and docs/databases/auth-v2-cutover.md. No default credential is provided.
 
-## Application Secret Setup
+## Auth security configuration
 
-The HMAC signature secret is not stored in source code. Configure it before using login, password hashing, token creation, or token validation.
-
-Preferred option: set an environment variable:
-
-```bat
-setx DELPHI_API_HMAC_SECRET "replace-with-a-long-random-secret"
-```
-
-For the current terminal session only:
-
-```bat
-set DELPHI_API_HMAC_SECRET=replace-with-a-long-random-secret
-```
-
-Alternative option: create `config.ini` in the application base directory:
-
-```ini
-[Security]
-HMACSecret=replace-with-a-long-random-secret
-```
-
-Use `config.example.ini` as the template. Do not commit your real `config.ini`.
+Use [config.example.ini](config.example.ini) and [Auth API](docs/api/auth.md). Argon2Library must be absolute,
+Argon2SHA256 pinned, with matching OS/bitness dependencies. No default credential/provider fallback.
+HMACSecret is used only by the original legacy verifier during an explicit finite LegacyHashDeadline;
+new passwords use salted Argon2id and token storage uses canonical SHA-256. Inject process-only secrets,
+never persist them via setx, command-line arguments, Postman saved values or repository config.
 
 ## MySQL Client Library
 
@@ -199,13 +186,9 @@ bin/libmysql.dll
 
 Alternatively, place the DLL directory in the Windows `PATH`.
 
-If you run from the IDE and the current directory is different, make sure `VendorHome` points to the directory containing the DLL. The current Windows startup code sets:
-
-```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
-```
-
-This means the application looks for the native client library from the current directory. If the DLL is stored elsewhere, adjust `VendorHome` in the startup code.
+Use Database.VendorLib or DELPHI_API_DB_VENDOR_LIB for an absolute protected native client path.
+When unset, FireDAC uses its normal platform library search. Configuration is executable-adjacent or
+absolute DELPHI_API_CONFIG; startup no longer hardcodes current-directory VendorHome.
 
 For an open-source repository, the recommended approach is not to commit `libmysql.dll` or binary ZIP files. Document the dependency and let users install the client library from the official vendor package.
 
@@ -213,13 +196,8 @@ For an open-source repository, the recommended approach is not to commit `libmys
 
 For Linux64 deployment, install the MySQL/MariaDB client library on the target server using the server distribution package manager or the official vendor package.
 
-The current Linux startup code sets:
-
-```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
-```
-
-If your Linux server stores the client library in a different location, adjust `VendorHome` in `DelphiAPIStarterKit.dpr` or adapt the startup code to read this path from deployment configuration.
+Configure an absolute Database.VendorLib native .so path if system resolution is insufficient.
+The source no longer hardcodes /www/server/mysql. Linux runtime/deployment still requires actual staging proof.
 
 ## Build
 
@@ -231,7 +209,7 @@ compile.bat
 
 The script:
 
-- Stops `DelphiAPIStarterKit.exe` if it is already running.
+- Does not stop processes. Stop only your own verified dev instance before overwriting its artifact.
 - Calls `rsvars.bat` from `DELPHI_RSVARS`, or from `%BDS%\bin\rsvars.bat` when running inside a Delphi command prompt.
 - Builds the project via MSBuild.
 - Defaults to `Debug | Win32`.
@@ -279,7 +257,7 @@ After building, run the executable from the output folder. Make sure:
 Default local base URL:
 
 ```text
-http://localhost:9381
+http://localhost:9000
 ```
 
 ## API Quickstart
@@ -293,15 +271,15 @@ docs/api/postman.collection.json
 Set the collection variable:
 
 ```text
-base_url = http://localhost:9381/
+base_url = http://localhost:9000/
 ```
 
 Login request example:
 
 ```bat
-curl -X POST http://localhost:9381/api/v1/Auth/Login ^
+curl -X POST http://localhost:9000/api/v1/Auth/Login ^
   -H "Content-Type: application/json" ^
-  -d "{\"username\":\"demo_admin\",\"password\":\"demo_admin\",\"device_id\":\"local-dev\",\"device_name\":\"CLI\"}"
+  -d "{\"username\":\"{{operator_selected_credential}}\",\"password\":\"{{operator_selected_credential}}\",\"device_id\":\"local-dev\",\"device_name\":\"CLI\"}"
 ```
 
 The database schema does not insert a default demo user. Create your own local test user before expecting the login example to succeed.
@@ -533,9 +511,14 @@ docs/api/postman.collection.json
 The sample schema contains:
 
 - `m_role`
+- `m_permission`
+- `role_permission`
 - `users`
 - `user_session`
 - `access_token`
+- `refresh_token`
+- `password_reset_token`
+- `auth_security_event`
 - `category`
 - `product`
 - `customer`
@@ -551,8 +534,8 @@ assets/databases/demo_delphirest.sql
 Before production use:
 
 - Move database credentials to config/environment variables.
-- Configure `DELPHI_API_HMAC_SECRET` or `[Security] HMACSecret` in `config.ini`.
-- Review the password hashing strategy. The starter currently uses HMAC-SHA256 with an application secret for simplicity; production systems should use a password hashing algorithm such as bcrypt, Argon2, or PBKDF2 with per-user salts and an appropriate work factor.
+- Configure the pinned Argon2 provider, security profile and finite legacy verifier only when needed.
+- Source uses Argon2id PHC with per-password salt. Verify native packaging/cost, compromised-password blocklist and MFA/client storage on staging.
 - Do not expose stack traces, SQL text, tokens, passwords, or secrets in responses/logs.
 - Run the API behind HTTPS.
 - Restrict CORS to trusted application domains.
@@ -568,6 +551,14 @@ Third-party dependencies such as MySQL/MariaDB client libraries follow their ven
 
 See `CONTRIBUTING.md` for development setup, coding standards, build validation, and documentation expectations.
 
+### Repository orchestration skills
+
+The [project-orchestrator skill](.agents/skills/project-orchestrator/SKILL.md) coordinates scoped implementation, bug fixes, reviews, build validation, and resumable work. Supporting skills live in `.agents/skills/`; [the project map](project-map.md) and [execution contract](.ai/ORCHESTRATOR.md) describe the current boundaries. Existing remediation tasks are linked through [the task index](.ai/TASK-INDEX.md) and run only when requested.
+
+Example invocation: `Use $project-orchestrator to execute wave-01 using docs/bugs/prompt-execute-wave-01.md within its scope.`
+
+Validate the package from the repository root with `powershell -NoProfile -File scripts/validate-orchestrator.ps1`. Local checkpoints and raw logs under `.ai/runs/` are ignored by Git; required task results remain in their existing documentation.
+
 ## Security Policy
 
 See `SECURITY.md` for vulnerability reporting and security review guidance.
@@ -575,3 +566,29 @@ See `SECURITY.md` for vulnerability reporting and security review guidance.
 ## Changelog
 
 See `CHANGELOG.md` for unreleased changes and release notes.
+
+
+## Auth-v2 WAVE-01 cutover
+
+Source implements explicit permissions, role grants/delegation, last-admin protection, restricted initial-password sessions,
+Argon2id PHC, OS CSPRNG 32-byte credentials, rotating refresh/reuse revocation, recent reauthentication,
+owned session operations and one-time setup/reset redemption. Read [Auth API](docs/api/auth.md), [Users](docs/api/users.md),
+[Roles](docs/api/roles.md) and [migration guide](docs/databases/auth-v2-cutover.md) before deploying SQL/source/client together.
+
+Configuration authority: process DELPHI_API_CONFIG must be absolute; otherwise executable-adjacent config.ini, independent of CWD.
+[config.example.ini](config.example.ini) intentionally contains no credential or runnable provider default. Security.Argon2Library must be
+an absolute trusted native library of the matching OS/bitness with Argon2SHA256 lowercase pin and protected dependencies. Startup runs a
+known-answer vector; no fast-hash fallback. Database.VendorLib is optional absolute native client path; LoginTimeout is bounded 1–30 seconds.
+Default HTTP Port=9000, configurable DELPHI_API_PORT; CORS app allowlist empty by default, semicolon separated. Direct-peer IP only;
+forwarded headers do not identify actor/origin. HTTPS/proxy integration remains a deployment gate.
+
+Legacy HMACSecret is only needed when explicit finite LegacyHashDeadline activates the legacy verifier; new hashing/token storage do not
+use it. Preserve secret whitespace and inject secrets at runtime; never pass credentials on a command line or save them in Postman.
+Offline --bootstrap-admin reads process-only operator username/password and refuses nonempty users/replay; no HTTP bootstrap/default login.
+Offline --auth-cleanup runs bounded retention, preserving active reuse chains. Legacy Encrypt/Decrypt/EncodeCrypt/DecodeCrypt are deprecated
+obfuscation helpers forbidden for password/token/config secrets. No active security consumer exists in this repository; external consumers
+must be inventoried before migration. Auth-v2 token parser rejects malformed Base64URL rather than falling back to plaintext.
+
+Win64+MariaDB clone evidence and remaining Win32/Linux runtime, provider package, client storage/MFA/TLS production gates are recorded in
+[WAVE-01 result](docs/bugs/wave-01-result.md). password-only baseline does not prove MFA; any unsupported security profile fails closed.
+Build no longer kills processes by image name. Platform artifact collision/graceful supervisor shutdown remain T10 follow-up scope.

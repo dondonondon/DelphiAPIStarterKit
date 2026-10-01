@@ -2,185 +2,72 @@ unit User.Validator;
 
 interface
 
-uses
-  FireDAC.Comp.Client,
-  User.DTO;
+uses System.JSON, Web.HTTPApp, User.DTO;
 
 type
   TUserValidator = class
   public
-    class function ValidateChangePassword(AData: TFDMemTable;
-      out ARequest: TUserChangePasswordRequest; out AMessage: string): Boolean;
-    class function ValidateCreate(AData: TFDMemTable;
-      out ARequest: TUserCreateRequest; out AMessage: string): Boolean;
-    class function ValidateResetPassword(AData: TFDMemTable;
-      const AParts: TArray<string>; out ARequest: TUserResetPasswordRequest;
-      out AMessage: string): Boolean;
-    class function ValidateUpdate(AData: TFDMemTable; const AParts: TArray<string>;
-      out ARequest: TUserUpdateRequest; out AMessage: string): Boolean;
+    class function ValidateCreate(ARequest: TWebRequest): TUserCreateRequest; static;
+    class function ValidateUpdate(ARequest: TWebRequest; const AUserID: string): TUserUpdateRequest; static;
+    class procedure ValidateResetPassword(ARequest: TWebRequest); static;
   end;
 
 implementation
 
-uses
-  System.SysUtils,
-  BFA.Helper.Validator;
+uses System.SysUtils, BFA.Core.Request, Auth.Validator;
 
-{ TUserValidator }
-
-class function TUserValidator.ValidateChangePassword(AData: TFDMemTable;
-  out ARequest: TUserChangePasswordRequest; out AMessage: string): Boolean;
+class function TUserValidator.ValidateCreate(ARequest: TWebRequest): TUserCreateRequest;
+var LBody: TJSONObject;
 begin
-  Result := False;
-  ARequest.OldPassword := '';
-  ARequest.NewPassword := '';
-
-  if not THelperValidator.GetRequiredString(AData, 'old_password', 'Old password required',
-    ARequest.OldPassword, AMessage) then
-    Exit;
-
-  if not THelperValidator.GetRequiredString(AData, 'new_password', 'New password required',
-    ARequest.NewPassword, AMessage) then
-    Exit;
-
-  Result := True;
+  Result := Default(TUserCreateRequest);
+  LBody := THelperRequest.JSONObject(ARequest, ['username','password','fullname','is_active','role_id']);
+  try
+    Result.Username := THelperRequest.JSONString(LBody, 'username', True, 50);
+    TAuthValidator.Username(Result.Username);
+    Result.Password := THelperRequest.JSONString(LBody, 'password', False, 128);
+    if Assigned(LBody.GetValue('password')) then TAuthValidator.Password(Result.Password, True);
+    Result.Fullname := THelperRequest.JSONString(LBody, 'fullname', False, 100);
+    Result.IsActive := THelperRequest.JSONInteger(LBody, 'is_active', 0, 1, 1);
+    Result.HasRoleID := Assigned(LBody.GetValue('role_id'));
+    if Result.HasRoleID and not (LBody.GetValue('role_id') is TJSONNull) then
+      Result.RoleID := THelperRequest.JSONInteger(LBody, 'role_id', 1, MaxInt, 0);
+  finally
+    FreeAndNil(LBody);
+  end;
 end;
 
-class function TUserValidator.ValidateCreate(AData: TFDMemTable;
-  out ARequest: TUserCreateRequest; out AMessage: string): Boolean;
+class function TUserValidator.ValidateUpdate(ARequest: TWebRequest; const AUserID: string): TUserUpdateRequest;
+var LBody: TJSONObject;
 begin
-  Result := False;
-  ARequest.Username := '';
-  ARequest.Password := '';
-  ARequest.Fullname := '';
-  ARequest.IsActive := 1;
-  ARequest.RoleID := 0;
-  ARequest.HasRoleID := False;
-
-  if not THelperValidator.GetRequiredString(AData, 'username', 'Username required',
-    ARequest.Username, AMessage) then
-    Exit;
-
-  if not THelperValidator.GetRequiredString(AData, 'password', 'Password required',
-    ARequest.Password, AMessage) then
-    Exit;
-
-  ARequest.Fullname := THelperValidator.GetOptionalString(AData, 'fullname');
-
-  if Assigned(AData.FindField('is_active')) then begin
-    if not THelperValidator.ParseIntegerField(AData, 'is_active', 'Invalid is_active value',
-      ARequest.IsActive, AMessage) then
-      Exit;
-
-    if not (ARequest.IsActive in [0, 1]) then begin
-      AMessage := 'Invalid is_active value';
-      Exit;
-    end;
+  Result := Default(TUserUpdateRequest);
+  TAuthValidator.UUID(AUserID);
+  Result.UserID := AUserID;
+  LBody := THelperRequest.JSONObject(ARequest, ['fullname','is_active','role_id']);
+  try
+    Result.HasFullname := Assigned(LBody.GetValue('fullname'));
+    if Result.HasFullname then Result.Fullname := THelperRequest.JSONString(LBody, 'fullname', False, 100);
+    Result.HasIsActive := Assigned(LBody.GetValue('is_active'));
+    Result.IsActive := THelperRequest.JSONInteger(LBody, 'is_active', 0, 1, 0);
+    Result.HasRoleID := Assigned(LBody.GetValue('role_id'));
+    if Result.HasRoleID and not (LBody.GetValue('role_id') is TJSONNull) then
+      Result.RoleID := THelperRequest.JSONInteger(LBody, 'role_id', 1, MaxInt, 0);
+    if LBody.Count = 0 then raise ERequestInvalid.Create('No data to update.');
+  finally
+    FreeAndNil(LBody);
   end;
-
-  if Assigned(AData.FindField('role_id')) then begin
-    if not THelperValidator.ParseIntegerField(AData, 'role_id', 'Invalid role_id value',
-      ARequest.RoleID, AMessage) then
-      Exit;
-    ARequest.HasRoleID := True;
-  end;
-
-  Result := True;
 end;
 
-class function TUserValidator.ValidateResetPassword(AData: TFDMemTable;
-  const AParts: TArray<string>; out ARequest: TUserResetPasswordRequest;
-  out AMessage: string): Boolean;
-var
-  LConfirmText: string;
+class procedure TUserValidator.ValidateResetPassword(ARequest: TWebRequest);
+var LBody: TJSONObject; LConfirm: TJSONValue;
 begin
-  Result := False;
-  ARequest.TargetUserID := '';
-  ARequest.ConfirmReset := False;
-
-  if not THelperValidator.ExtractRouteUserID(AParts, ARequest.TargetUserID, AMessage) then
-    Exit;
-
-  if not THelperValidator.GetRequiredString(AData, 'confirm_reset', 'confirm_reset required',
-    LConfirmText, AMessage) then
-    Exit;
-
-  if not THelperValidator.ParseBoolText(LConfirmText, ARequest.ConfirmReset) then begin
-    AMessage := 'confirm_reset must be true';
-    Exit;
+  LBody := THelperRequest.JSONObject(ARequest, ['confirm_reset']);
+  try
+    LConfirm := LBody.GetValue('confirm_reset');
+    if not (LConfirm is TJSONBool) or not TJSONBool(LConfirm).AsBoolean then
+      raise ERequestInvalid.Create('confirm_reset must be true.');
+  finally
+    FreeAndNil(LBody);
   end;
-
-  if not ARequest.ConfirmReset then begin
-    AMessage := 'confirm_reset must be true';
-    Exit;
-  end;
-
-  Result := True;
-end;
-
-class function TUserValidator.ValidateUpdate(AData: TFDMemTable;
-  const AParts: TArray<string>; out ARequest: TUserUpdateRequest;
-  out AMessage: string): Boolean;
-begin
-  Result := False;
-  ARequest.UserID := '';
-  ARequest.Password := '';
-  ARequest.Fullname := '';
-  ARequest.IsActive := 0;
-  ARequest.RoleID := 0;
-  ARequest.HasPassword := False;
-  ARequest.HasFullname := False;
-  ARequest.HasIsActive := False;
-  ARequest.HasRoleID := False;
-
-  if not THelperValidator.ExtractRouteUserID(AParts, ARequest.UserID, AMessage) then
-    Exit;
-
-  if Assigned(AData.FindField('username')) then begin
-    AMessage := 'Username cannot be changed';
-    Exit;
-  end;
-
-  if Assigned(AData.FindField('password')) then begin
-    ARequest.Password := Trim(AData.FieldByName('password').AsString);
-    if ARequest.Password = '' then begin
-      AMessage := 'Password required';
-      Exit;
-    end;
-    ARequest.HasPassword := True;
-  end;
-
-  if Assigned(AData.FindField('fullname')) then begin
-    ARequest.Fullname := Trim(AData.FieldByName('fullname').AsString);
-    ARequest.HasFullname := True;
-  end;
-
-  if Assigned(AData.FindField('is_active')) then begin
-    if not THelperValidator.ParseIntegerField(AData, 'is_active', 'Invalid is_active value',
-      ARequest.IsActive, AMessage) then
-      Exit;
-
-    if not (ARequest.IsActive in [0, 1]) then begin
-      AMessage := 'Invalid is_active value';
-      Exit;
-    end;
-    ARequest.HasIsActive := True;
-  end;
-
-  if Assigned(AData.FindField('role_id')) then begin
-    if not THelperValidator.ParseIntegerField(AData, 'role_id', 'Invalid role_id value',
-      ARequest.RoleID, AMessage) then
-      Exit;
-    ARequest.HasRoleID := True;
-  end;
-
-  if not (ARequest.HasPassword or ARequest.HasFullname or
-    ARequest.HasIsActive or ARequest.HasRoleID) then begin
-    AMessage := 'No data to update';
-    Exit;
-  end;
-
-  Result := True;
 end;
 
 end.
