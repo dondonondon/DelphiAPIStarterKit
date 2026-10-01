@@ -3,7 +3,7 @@
 interface
 
 uses
-  System.SysUtils, System.Classes,
+  System.SysUtils, System.Classes, System.JSON,
   Data.DB,
   FireDAC.Comp.Client;
 
@@ -23,6 +23,8 @@ type
   end;
 
   THelperResponse = class
+    class function FieldValue(AField: TField): TJSONValue; static;
+    class function CreateResponse(AStatusCode: Integer; AMessage: string; ADataResponse: TJSONArray): string; overload;
     class function IsValidDateTime(const AText: string): Boolean;
     class function CreateResponse(AStatusCode: Integer; AMessage: string;
       ADataResponse: TDataset; ARequest: TDataSet = nil): string; overload;
@@ -46,14 +48,13 @@ type
 implementation
 
 uses
-  System.JSON, System.DateUtils, System.Generics.Collections,
-  BFA.Helper.Strings, BFA.Core.Messages;
+  System.DateUtils, System.Generics.Collections,
+  BFA.Helper.Strings, BFA.Core.Messages, BFA.Helper.Clock, Data.FmtBcd, System.Math;
 
 const
   STATUS_PROPERTY = 'status';
   MESSAGES_PROPERTY = 'messages';
   SERVER_TIME_PROPERTY = 'servertime';
-  REQUEST_DETAIL_PROPERTY = 'request_detail';
   DATA_PROPERTY = 'data';
 
 function IsSuccessStatus(AStatusCode: Integer): Boolean;
@@ -67,7 +68,7 @@ begin
   try
     Result.AddPair(STATUS_PROPERTY, TJSONNumber.Create(AStatusCode));
     Result.AddPair(MESSAGES_PROPERTY, AMessage);
-    Result.AddPair(SERVER_TIME_PROPERTY, DateTimeToUnix(Now).ToString);
+    Result.AddPair(SERVER_TIME_PROPERTY, THelperClock.UnixNow.ToString);
   except
     FreeAndNil(Result);
     raise;
@@ -101,138 +102,43 @@ begin
   Result := AResponse.ToJSON;
 end;
 
-function TryParseNestedJSON(const AText: string; out AValue: TJSONValue): Boolean;
-var
-  LText: string;
-begin
-  Result := False;
-  AValue := nil;
-  LText := Trim(AText);
-
-  if LText = '' then exit;
-  if not (((LText.StartsWith('{')) and (LText.EndsWith('}'))) or
-    ((LText.StartsWith('[')) and (LText.EndsWith(']')))) then exit;
-
-  try
-    AValue := TJSONObject.ParseJSONValue(LText);
-    Result := Assigned(AValue);
-  except
-    FreeAndNil(AValue);
-  end;
-end;
-
-function NormalizeJSONNode(ANode: TJSONValue): TJSONValue;
-var
-  I: Integer;
-  LSourceObject: TJSONObject;
-  LTargetObject: TJSONObject;
-  LSourceArray: TJSONArray;
-  LTargetArray: TJSONArray;
-  LParsedValue: TJSONValue;
-  LText: string;
-begin
-  Result := nil;
-  if not Assigned(ANode) then exit;
-
-  if ANode is TJSONObject then begin
-    LSourceObject := TJSONObject(ANode);
-    LTargetObject := TJSONObject.Create;
-    try
-      for I := 0 to LSourceObject.Count - 1 do begin
-        LTargetObject.AddPair(LSourceObject.Pairs[I].JsonString.Value,
-          NormalizeJSONNode(LSourceObject.Pairs[I].JsonValue));
-      end;
-      Result := LTargetObject;
-    except
-      FreeAndNil(LTargetObject);
-      raise;
-    end;
-  end else if ANode is TJSONArray then begin
-    LSourceArray := TJSONArray(ANode);
-    LTargetArray := TJSONArray.Create;
-    try
-      for I := 0 to LSourceArray.Count - 1 do
-        LTargetArray.AddElement(NormalizeJSONNode(LSourceArray.Items[I]));
-      Result := LTargetArray;
-    except
-      FreeAndNil(LTargetArray);
-      raise;
-    end;
-  end else if ANode is TJSONString then begin
-    LText := TJSONString(ANode).Value;
-    if TryParseNestedJSON(LText, LParsedValue) then begin
-      try
-        Result := NormalizeJSONNode(LParsedValue);
-      finally
-        FreeAndNil(LParsedValue);
-      end;
-    end else
-      Result := TJSONString.Create(LText);
-  end else if ANode is TJSONNumber then
-    Result := TJSONNumber.Create(ANode.ToJSON)
-  else if (ANode is TJSONTrue) or (ANode is TJSONFalse) then
-    Result := TJSONBool.Create(ANode is TJSONTrue)
-  else if ANode is TJSONNull then
-    Result := TJSONNull.Create
-  else
-    Result := TJSONObject.ParseJSONValue(ANode.ToJSON);
-end;
-
 function JSONValueFromString(const AValue: string): TJSONValue;
-var
-  LJSONValue: TJSONValue;
 begin
-  if TryParseNestedJSON(AValue, LJSONValue) then begin
-    try
-      Result := NormalizeJSONNode(LJSONValue);
-    finally
-      FreeAndNil(LJSONValue);
-    end;
-    exit;
-  end;
+  Result := TJSONString.Create(AValue);
+end;
 
-  if TValueValidator.IsNumber(AValue) then begin
-    if (Length(AValue) > 1) and AValue.StartsWith('0') then
-      Result := TJSONString.Create(AValue)
-    else
-      Result := TJSONNumber.Create(AValue);
-  end else
-    Result := TJSONString.Create(AValue);
+class function THelperResponse.FieldValue(AField: TField): TJSONValue;
+var LNumber: string;
+begin
+  if AField.IsNull then Exit(TJSONNull.Create);
+  case AField.DataType of
+    ftSmallint, ftInteger, ftWord, ftLargeint, ftLongWord, ftShortint, ftByte, ftAutoInc:
+      Result := TJSONNumber.Create(AField.AsLargeInt);
+    ftBoolean: Result := TJSONBool.Create(AField.AsBoolean);
+    ftFMTBcd: Result := TJSONNumber.Create(BcdToStr(TFMTBCDField(AField).AsBCD, TFormatSettings.Invariant));
+    ftCurrency, ftBCD: Result := TJSONNumber.Create(CurrToStr(AField.AsCurrency, TFormatSettings.Invariant));
+    ftFloat, ftSingle, ftExtended: begin
+      if IsNan(AField.AsFloat) or IsInfinite(AField.AsFloat) then raise EConvertError.Create('Non-finite JSON number.');
+      LNumber := FloatToStr(AField.AsFloat, TFormatSettings.Invariant);
+      Result := TJSONNumber.Create(LNumber);
+    end;
+    ftDate: Result := TJSONString.Create(FormatDateTime('yyyy-mm-dd', AField.AsDateTime, TFormatSettings.Invariant));
+    ftTime: Result := TJSONString.Create(FormatDateTime('hh:nn:ss', AField.AsDateTime, TFormatSettings.Invariant));
+    ftDateTime, ftTimeStamp: Result := TJSONString.Create(THelperClock.ISO8601UTC(AField.AsDateTime));
+  else Result := TJSONString.Create(AField.AsString);
+  end;
 end;
 
 procedure AddJSONPairFromField(AObject: TJSONObject; const AName: string; AField: TField);
 begin
-  if AField.IsNull then begin
-    AObject.AddPair(AName, TJSONNull.Create);
-    exit;
-  end;
-
-  if AField.DataType = ftBoolean then
-    AObject.AddPair(AName, TJSONBool.Create(AField.AsBoolean))
-  else
-    AObject.AddPair(AName, JSONValueFromString(AField.AsString));
+  AObject.AddPair(AName, THelperResponse.FieldValue(AField));
 end;
 
 procedure AddResponseField(AObject: TJSONObject; AField: TField);
-var
-  LUnixTime: string;
 begin
-  if AField.IsNull then begin
-    AObject.AddPair(AField.FieldName, TJSONNull.Create);
-    exit;
-  end;
-
-  if AField.DataType = ftDateTime then begin
-    AObject.AddPair(AField.FieldName, FormatDateTime('yyyy-mm-dd hh:nn:ss',
-      AField.AsDateTime));
-    LUnixTime := DateTimeToUnix(AField.AsDateTime).ToString;
-    AObject.AddPair(AField.FieldName + '_unix', LUnixTime);
-  end else if AField.DataType = ftDate then begin
-    AObject.AddPair(AField.FieldName, FormatDateTime('yyyy-mm-dd', AField.AsDateTime));
-    LUnixTime := DateTimeToUnix(AField.AsDateTime).ToString;
-    AObject.AddPair(AField.FieldName + '_unix', LUnixTime);
-  end else
-    AddJSONPairFromField(AObject, AField.FieldName, AField);
+  AddJSONPairFromField(AObject, AField.FieldName, AField);
+  if not AField.IsNull and (AField.DataType in [ftDateTime, ftTimeStamp]) then
+    AObject.AddPair(AField.FieldName + '_unix', THelperClock.UnixUTC(AField.AsDateTime).ToString);
 end;
 
 function CreateDatasetObject(ADataset: TDataset; AFormatResponseFields: Boolean): TJSONObject;
@@ -242,8 +148,7 @@ var
 begin
   Result := TJSONObject.Create;
   try
-    for I := 0 to ADataset.FieldDefs.Count - 1 do begin
-      LField := ADataset.FieldByName(ADataset.FieldDefs[I].Name);
+    for LField in ADataset.Fields do begin
       if AFormatResponseFields then
         AddResponseField(Result, LField)
       else
@@ -264,7 +169,7 @@ begin
     if not Assigned(ADataset) or not ADataset.Active or ADataset.IsEmpty then exit;
 
     ADataset.First;
-    for LRecordIndex := 0 to ADataset.RecordCount - 1 do begin
+    while not ADataset.Eof do begin
       Result.AddElement(CreateDatasetObject(ADataset, AFormatResponseFields));
       ADataset.Next;
     end;
@@ -298,6 +203,7 @@ function CreateStringListArray(AValues: TStringList): TJSONArray;
 begin
   Result := TJSONArray.Create;
   try
+    if not Assigned(AValues) or (AValues.Count = 0) then Exit;
     Result.AddElement(CreateStringListObject(AValues));
   except
     FreeAndNil(Result);
@@ -333,14 +239,15 @@ begin
   Result := TJSONArray.Create;
   try
     LParsedValue := TJSONObject.ParseJSONValue(AJSONData);
-    if not Assigned(LParsedValue) then exit;
+    if not Assigned(LParsedValue) then raise EConvertError.Create('Invalid response JSON.');
 
     try
       if LParsedValue is TJSONArray then begin
         for I := 0 to TJSONArray(LParsedValue).Count - 1 do
           Result.AddElement(TJSONArray(LParsedValue).Items[I].Clone as TJSONValue);
       end else if LParsedValue is TJSONObject then
-        Result.AddElement(LParsedValue.Clone as TJSONValue);
+        Result.AddElement(LParsedValue.Clone as TJSONValue)
+      else raise EConvertError.Create('Response JSON object or array required.');
     finally
       FreeAndNil(LParsedValue);
     end;
@@ -351,42 +258,20 @@ begin
 end;
 
 function CreateQueryArray(AQuery: TFDQuery; AEncodeString: Boolean): TJSONArray;
-var
-  LData: TJSONObject;
-  LField: TField;
-  LValue: string;
+var LRow: TJSONObject; LField: TField;
 begin
   Result := TJSONArray.Create;
   try
-    if not Assigned(AQuery) or not AQuery.Active or AQuery.IsEmpty then exit;
-
+    if not Assigned(AQuery) or not AQuery.Active or AQuery.IsEmpty then Exit;
     AQuery.First;
     while not AQuery.Eof do begin
-      LData := TJSONObject.Create;
-      try
-        for LField in AQuery.Fields do begin
-          if LField.IsNull then begin
-            LData.AddPair(LField.FieldName, TJSONNull.Create);
-            continue;
-          end;
-
-          case LField.DataType of
-            ftSmallint, ftInteger, ftLargeint, ftFloat, ftCurrency, ftBCD, ftFMTBcd:
-              LData.AddPair(LField.FieldName, TJSONNumber.Create(LField.AsString));
-            ftBoolean:
-              LData.AddPair(LField.FieldName, TJSONBool.Create(LField.AsBoolean));
-          else
-            LValue := LField.AsString;
-            if AEncodeString then
-              LData.AddPair(LField.FieldName, TGlobalFunction.EncodeBase64(LValue))
-            else
-              LData.AddPair(LField.FieldName, JSONValueFromString(LValue));
-          end;
-        end;
-        Result.AddElement(LData);
-        LData := nil;
-      finally
-        FreeAndNil(LData);
+      LRow := TJSONObject.Create;
+      Result.AddElement(LRow);
+      for LField in AQuery.Fields do begin
+        if AEncodeString and not LField.IsNull and
+          (LField.DataType in [ftString,ftWideString,ftMemo,ftWideMemo,ftFixedChar,ftFixedWideChar]) then
+          LRow.AddPair(LField.FieldName, TGlobalFunction.EncodeBase64(LField.AsString))
+        else AddJSONPairFromField(LRow, LField.FieldName, LField);
       end;
       AQuery.Next;
     end;
@@ -431,21 +316,26 @@ begin
   end;
 end;
 
+class function THelperResponse.CreateResponse(AStatusCode: Integer; AMessage: string; ADataResponse: TJSONArray): string;
+var LResponse: TJSONObject; LData: TJSONArray;
+begin
+  LResponse := CreateResponseEnvelope(AStatusCode, AMessage);
+  try
+    if Assigned(ADataResponse) then LData := TJSONArray(ADataResponse.Clone) else LData := TJSONArray.Create;
+    Result := SerializeResponse(LResponse, AStatusCode, LData);
+  finally
+    FreeAndNil(LResponse);
+  end;
+end;
+
 class function THelperResponse.CreateResponse(AStatusCode: Integer;
   AMessage: string; ADataResponse, ARequest: TDataSet): string;
 var
   LResponse: TJSONObject;
-  LRequestDetail: TJSONObject;
   LData: TJSONArray;
 begin
   LResponse := CreateResponseEnvelope(AStatusCode, AMessage);
   try
-    if Assigned(ARequest) and ARequest.Active and not ARequest.IsEmpty then begin
-      ARequest.First;
-      LRequestDetail := CreateDatasetObject(ARequest, False);
-      LResponse.AddPair(REQUEST_DETAIL_PROPERTY, LRequestDetail);
-    end;
-
     LData := CreateDatasetArray(ADataResponse, True);
     Result := SerializeResponse(LResponse, AStatusCode, LData);
   finally
@@ -476,7 +366,7 @@ var
 begin
   LResponse := CreateResponseEnvelope(AStatusCode, AMessage);
   try
-    LData := CreateObjectDataArray;
+    LData := TJSONArray.Create;
     Result := SerializeResponse(LResponse, AStatusCode, LData);
   finally
     FreeAndNil(LResponse);

@@ -26,8 +26,13 @@ sources
 |   |   +-- DB.ConnectionFactory.pas
 |   |   +-- DB.Helper.Query.pas
 |   |
+|   +-- logging
+|   |   +-- BFA.Logger.pas
+|   |
 |   +-- security
 |       +-- BFA.Security.Token.pas
+|       +-- BFA.Security.Crypto.pas
+|       +-- BFA.Security.Transport.pas
 |
 +-- modules
 |   +-- auth
@@ -36,6 +41,9 @@ sources
 |   |   +-- Auth.Repository.pas
 |   |   +-- Auth.Service.pas
 |   |   +-- Auth.Validator.pas
+|   |   +-- Auth.Policy.pas
+|   |   +-- Auth.Settings.pas
+|   |   +-- Auth.Bootstrap.pas
 |   |
 |   +-- category
 |   |   +-- RestAPI.Category.pas
@@ -57,6 +65,12 @@ sources
 |   |   +-- Product.Repository.pas
 |   |   +-- Product.Service.pas
 |   |   +-- Product.Validator.pas
+|   |
+|   +-- roles
+|   |   +-- RestAPI.Role.pas
+|   |   +-- Role.Validator.pas
+|   |   +-- Role.Service.pas
+|   |   +-- Role.Repository.pas
 |   |
 |   +-- sample
 |   |   +-- RestAPI.Sample.pas

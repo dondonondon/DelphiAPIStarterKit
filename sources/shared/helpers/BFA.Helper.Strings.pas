@@ -12,7 +12,7 @@ uses
   System.DateUtils,
   System.IniFiles,
   System.IOUtils,
-  System.Hash;
+  System.Hash, BFA.Core.Config;
 
 type
   TGlobalFunction = class
@@ -40,11 +40,11 @@ type
 
     class function EncodeBase64 (AString : String) : String;
     class function DecodeBase64 (AString : String) : String;
-    class function Encrypt(const s: String): String;
-    class function Decrypt(const s: String): String;
+    class function Encrypt(const s: String): String; deprecated 'Legacy obfuscation only; forbidden for credentials and configuration secrets.';
+    class function Decrypt(const s: String): String; deprecated 'Legacy obfuscation only; forbidden for credentials and configuration secrets.';
 
-    class function EncodeCrypt(const s : String) : String;
-    class function DecodeCrypt(const s : String) : String;
+    class function EncodeCrypt(const s : String) : String; deprecated 'Legacy obfuscation only; forbidden for credentials and configuration secrets.';
+    class function DecodeCrypt(const s : String) : String; deprecated 'Legacy obfuscation only; forbidden for credentials and configuration secrets.';
 
     class function DownloadFile(AURL, ASaveFile : String) : Boolean;
 
@@ -63,6 +63,8 @@ const
   HMAC_SECRET_NAME = 'HMACSecret';
 
 implementation
+
+uses BFA.Helper.Clock;
 
 class function TGlobalFunction.Base64ToFile(const Base64Str,
   OutputFilePath: string): Boolean;
@@ -244,27 +246,9 @@ begin
 end;
 
 class function TGlobalFunction.GetHMACSignatureSecret: string;
-var
-  LConfigFileName: string;
-  LIni: TIniFile;
 begin
-  Result := Trim(GetEnvironmentVariable(HMAC_SECRET_ENV_NAME));
-  if Result <> '' then
-    Exit;
-
-  LConfigFileName := TPath.Combine(GetBaseDirectory, 'config.ini');
-  if FileExists(LConfigFileName) then begin
-    LIni := TIniFile.Create(LConfigFileName);
-    try
-      Result := Trim(LIni.ReadString(HMAC_SECRET_SECTION, HMAC_SECRET_NAME, ''));
-    finally
-      FreeAndNil(LIni);
-    end;
-  end;
-
-  if Result = '' then
-    raise Exception.CreateFmt('%s environment variable or [%s] %s in config.ini is required.',
-      [HMAC_SECRET_ENV_NAME, HMAC_SECRET_SECTION, HMAC_SECRET_NAME]);
+  Result := TServerConfig.ReadValue('Security', 'HMACSecret', HMAC_SECRET_ENV_NAME, '', True);
+  if (Result = '') or Result.StartsWith('change-this') then raise Exception.Create('Legacy verifier secret unavailable.');
 end;
 
 class function TGlobalFunction.LoadFile(AFileName: String): String;
@@ -309,7 +293,7 @@ class function TGlobalFunction.LoadSettingStringDir(Section, Name,
 var
   ini: TIniFile;
 begin
-  ini := TIniFile.Create(TPath.Combine(GetBaseDirectory, 'config.ini'));
+  ini := TIniFile.Create(TServerConfig.FileName);
   try
     Result := ini.ReadString(Section, Name, Value);
   finally
@@ -323,7 +307,7 @@ var
 begin
   CreateGUID(G);
   Result := LowerCase(
-    IntToHex(DateTimeToUnix(Now), 8) +
+    IntToHex(THelperClock.UnixNow, 8) +
     Copy(G.ToString, 2, 28)
   );
 end;
@@ -366,7 +350,7 @@ class procedure TGlobalFunction.SaveSettingStringDir(Section, Name,
 var
   ini: TIniFile;
 begin
-  ini := TIniFile.Create(TPath.Combine(GetBaseDirectory, 'config.ini'));
+  ini := TIniFile.Create(TServerConfig.FileName);
   try
     ini.WriteString(Section, Name, Value);
   finally

@@ -53,7 +53,11 @@ end;
 class procedure TQueryFunction.SQLParamByName(Query: TFDQuery;
   ParamStr: string; Value: Variant);
 begin
-  Query.ParamByName(ParamStr).Value := Value;
+  if (VarType(Value) = varString) or (VarType(Value) = varOleStr) or (VarType(Value) = varUString) then
+    Query.ParamByName(ParamStr).AsWideString := VarToStr(Value)
+  else if VarType(Value) = varCurrency then
+    Query.ParamByName(ParamStr).AsCurrency := Value
+  else Query.ParamByName(ParamStr).Value := Value;
 end;
 
 end.

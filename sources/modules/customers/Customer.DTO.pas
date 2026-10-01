@@ -1,4 +1,4 @@
-unit Customer.DTO;
+﻿unit Customer.DTO;
 
 interface
 
@@ -75,7 +75,7 @@ begin
     LJSON.AddPair('postal_code', APostalCode);
     LJSON.AddPair('country', ACountry);
     LJSON.AddPair('notes', ANotes);
-    LJSON.AddPair('is_active', TJSONNumber.Create(AIsActive));
+    LJSON.AddPair('is_active', TJSONBool.Create(AIsActive = 1));
     Result := LJSON.ToJSON;
   finally
     FreeAndNil(LJSON);

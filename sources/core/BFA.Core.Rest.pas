@@ -21,7 +21,7 @@ type
     FAPIVersion: string;
 
     function BuildClassName: string; inline;
-    function LoadRequestData(const AJSON: string): TFDMemTable;
+    function LoadRequestData(ARequest: TWebRequest): TFDMemTable;
     function ResolveAPIClass(out AClass: TPersistentClass): Boolean;
 
     function InvokeRouteMethod(AInstance: TObject; AData: TFDMemTable; AWebAction: TWebActionItem;
@@ -93,17 +93,11 @@ uses
   RestAPI.Auth,
   RestAPI.Product,
   RestAPI.Category,
-  RestAPI.Customer;
+  RestAPI.Customer, RestAPI.Role, BFA.Logger, BFA.Core.Request;
 
 procedure WriteCoreErrorLog(const ASource: string; AException: Exception);
-var
-  LFileName: string;
-  LMessage: string;
 begin
-  LFileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'server-error.log');
-  LMessage := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) +
-    ' ' + ASource + ': ' + AException.ClassName + ': ' + AException.Message + sLineBreak;
-  TFile.AppendAllText(LFileName, LMessage, TEncoding.UTF8);
+  THelperLogger.Error(ASource, AException);
 end;
 
 constructor TClassHelper.Create;
@@ -127,26 +121,9 @@ begin
 end;
 
 function TClassHelper.BuildErrorResponse(ACode: Integer; const AMessage: string): string;
-var
-  LJSON: TJSONObject;
-  LDataArray: TJSONArray;
 begin
   StatusCode := ACode;
-
-  LJSON := TJSONObject.Create;
-  try
-    LJSON.AddPair('status', TJSONNumber.Create(ACode));
-    LJSON.AddPair('messages', AMessage);
-    LJSON.AddPair('servertime', IntToStr(DateTimeToUnix(Now)));
-
-    LDataArray := TJSONArray.Create;
-    LDataArray.Add(TJSONObject.Create);
-    LJSON.AddPair('data', LDataArray);
-
-    Result := LJSON.ToJSON;
-  finally
-    FreeAndNil(LJSON);
-  end;
+  Result := THelperResponse.CreateResponse(ACode, AMessage);
 end;
 
 function TClassHelper.BuildClassName: string;
@@ -154,15 +131,43 @@ begin
   Result := CLASS_PREFIX + FAPIVersion + FRequestClass;
 end;
 
-function TClassHelper.LoadRequestData(const AJSON: string): TFDMemTable;
+function TClassHelper.LoadRequestData(ARequest: TWebRequest): TFDMemTable;
+var LBody: TJSONObject; LPair: TJSONPair; LName: string;
 begin
   Result := TFDMemTable.Create(nil);
+  LBody := nil;
   try
-    if AJSON <> '' then
-      Result.LoadFromJSON(AJSON);
+    try
+    if SameText(FRequestClass, 'Auth') or SameText(FRequestClass, 'User') or SameText(FRequestClass, 'Role') then Exit;
+    if SameText(ARequest.Method, 'POST') or SameText(ARequest.Method, 'PUT') then begin
+      if SameText(FRequestClass, 'Product') then
+        LBody := THelperRequest.JSONObject(ARequest, ['product_name','description','price','stock','category_id','is_active'])
+      else if SameText(FRequestClass, 'Category') then
+        LBody := THelperRequest.JSONObject(ARequest, ['category_name','description','is_active'])
+      else if SameText(FRequestClass, 'Customer') then
+        LBody := THelperRequest.JSONObject(ARequest, ['customer_name','email','phone_number','address_line1','address_line2',
+          'city','state','postal_code','country','notes','is_active'])
+      else raise ERequestInvalid.Create('Unsupported request body.');
+      for LPair in LBody do begin
+        LName := LPair.JsonString.Value;
+        if LName = 'price' then begin
+          if not (LPair.JsonValue is TJSONNumber) then raise ERequestInvalid.Create('price must be a number.');
+        end else if (LName = 'stock') or (LName = 'is_active') then begin
+          if not (LPair.JsonValue is TJSONNumber) then raise ERequestInvalid.Create('Integer required.');
+        end else if (LName = 'category_id') and (LPair.JsonValue is TJSONNull) then Continue
+        else if not (LPair.JsonValue is TJSONString) then raise ERequestInvalid.Create('String required.');
+      end;
+      THelperMemoryTable.CreateDataset(Result, LBody);
+      THelperMemoryTable.FillDataset(Result, LBody);
+    end else if ARequest.Content <> '' then begin
+      raise ERequestInvalid.Create('This method does not accept a request body.');
+    end;
   except
     FreeAndNil(Result);
     raise;
+    end;
+  finally
+    FreeAndNil(LBody);
   end;
 end;
 
@@ -171,7 +176,7 @@ var
   LClassName: string;
 begin
   LClassName := BuildClassName;
-  AClass := FindClass(LClassName);
+  AClass := GetClass(LClassName);
   Result := Assigned(AClass);
 end;
 
@@ -208,10 +213,13 @@ begin
   LDataRequest := nil;
   try
     try
-      LDataRequest := LoadRequestData(AJSON);
+      LDataRequest := LoadRequestData(ARequest);
     except
-      on E: Exception do
-      begin
+      on E: ERequestInvalid do begin
+        AStatusCode := E.Status;
+        Exit(BuildErrorResponse(E.Status, E.Message));
+      end;
+      on E: Exception do begin
         WriteCoreErrorLog('Core request data error', E);
         AStatusCode := STATUS_INTERNAL_ERROR;
         Exit(BuildErrorResponse(AStatusCode, MSG_INTERNAL_ERROR));
@@ -247,7 +255,7 @@ end;
 procedure RegisterClassAPI;
 begin
   RegisterClassAPI([TRestClassV1User, TRestClassV1Auth, TRestClassV1Product,
-    TRestClassV1Category, TRestClassV1Customer]);
+    TRestClassV1Category, TRestClassV1Customer, TRestClassV1Role]);
 end;
 
 procedure RegisterClassAPI(const AClasses: array of TPersistentClass);

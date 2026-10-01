@@ -30,7 +30,7 @@ uses
   FireDAC.Stan.Param,
   FireDAC.DApt,
   System.IniFiles,
-  System.IOUtils;
+  System.IOUtils, BFA.Core.Config;
 
 const
   DB_CONNECTION_NAME = 'MyDB';
@@ -54,15 +54,22 @@ const
 
 class function TDBConnectionFactory.ConfigFileName: string;
 begin
-  Result := TPath.Combine(ExpandFileName(GetCurrentDir), 'config.ini');
+  Result := TServerConfig.FileName;
 end;
 
 class function TDBConnectionFactory.GetConnection: TFDConnection;
 begin
   Result := TFDConnection.Create(nil);
-  Result.ConnectionDefName := DB_CONNECTION_NAME;
-  Result.LoginPrompt := False;
-  Result.Connected := True;
+  try
+    Result.ConnectionDefName := DB_CONNECTION_NAME;
+    Result.LoginPrompt := False;
+    Result.Connected := True;
+    Result.ExecSQL('SET SESSION time_zone = ''+00:00''');
+    Result.TxOptions.Isolation := xiReadCommitted;
+  except
+    FreeAndNil(Result);
+    raise;
+  end;
 end;
 
 class procedure TDBConnectionFactory.Initialize;
@@ -80,6 +87,11 @@ begin
       Params.Values[DB_PASSWORD_NAME] := ReadDatabaseSetting(DB_PASSWORD_ENV_NAME, DB_PASSWORD_NAME, '');
       Params.Values[DB_CHARACTER_SET_NAME] := ReadDatabaseSetting(DB_CHARACTER_SET_ENV_NAME, DB_CHARACTER_SET_NAME, 'utf8mb4');
 
+      Params.Values['Port'] := ReadDatabaseSetting('DELPHI_API_DB_PORT', 'Port', '3306');
+      var LTimeout: Integer;
+      if not TryStrToInt(ReadDatabaseSetting('DELPHI_API_DB_LOGIN_TIMEOUT', 'LoginTimeout', '5'), LTimeout) or
+        (LTimeout < 1) or (LTimeout > 30) then raise Exception.Create('Invalid database login timeout.');
+      Params.Values['LoginTimeout'] := IntToStr(LTimeout);
       Params.Values['Pooled'] := 'True';
       Params.Values[DB_POOL_MAXIMUM_ITEMS_NAME] := ReadDatabaseSetting(DB_POOL_MAXIMUM_ITEMS_ENV_NAME, DB_POOL_MAXIMUM_ITEMS_NAME, '50');
       Params.Values[DB_POOL_EXPIRE_TIMEOUT_NAME] := ReadDatabaseSetting(DB_POOL_EXPIRE_TIMEOUT_ENV_NAME, DB_POOL_EXPIRE_TIMEOUT_NAME, '300000');
@@ -96,27 +108,9 @@ begin
   end;
 end;
 
-class function TDBConnectionFactory.ReadDatabaseSetting(const AEnvName, AName,
-  ADefaultValue: string): string;
-var
-  LConfigFileName: string;
-  LIni: TIniFile;
+class function TDBConnectionFactory.ReadDatabaseSetting(const AEnvName, AName, ADefaultValue: string): string;
 begin
-  Result := Trim(GetEnvironmentVariable(AEnvName));
-  if Result <> '' then
-    Exit;
-
-  Result := ADefaultValue;
-  LConfigFileName := ConfigFileName;
-  if not FileExists(LConfigFileName) then
-    Exit;
-
-  LIni := TIniFile.Create(LConfigFileName);
-  try
-    Result := Trim(LIni.ReadString(DB_CONFIG_SECTION, AName, ADefaultValue));
-  finally
-    FreeAndNil(LIni);
-  end;
+  Result := TServerConfig.ReadValue(DB_CONFIG_SECTION, AName, AEnvName, ADefaultValue, AName = DB_PASSWORD_NAME);
 end;
 
 class function TDBConnectionFactory.RequireDatabaseSetting(const AEnvName,

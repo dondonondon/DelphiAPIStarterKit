@@ -42,27 +42,11 @@ type
     class function CreateUserResponse(const AUserID, AUsername,
       AFullname: string; AIsActive: Integer; AHasRoleID: Boolean;
       ARoleID: Integer): TStringList;
-    class function CreateResetPasswordResponse(const ATargetUserID,
-      ARequesterID, ATemporaryPassword: string): TStringList;
   end;
 
 implementation
 
 { TUserDTO }
-
-class function TUserDTO.CreateResetPasswordResponse(const ATargetUserID,
-  ARequesterID, ATemporaryPassword: string): TStringList;
-begin
-  Result := TStringList.Create;
-  try
-    Result.AddPair('user_id', ATargetUserID);
-    Result.AddPair('reset_by', ARequesterID);
-    Result.AddPair('temporary_password', ATemporaryPassword);
-  except
-    Result.Free;
-    raise;
-  end;
-end;
 
 class function TUserDTO.CreateUserResponse(const AUserID, AUsername,
   AFullname: string; AIsActive: Integer; AHasRoleID: Boolean;

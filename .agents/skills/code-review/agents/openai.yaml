@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review Delphi API Code"
+  short_description: "Review Delphi API security, ownership, and contracts"
+  default_prompt: "Use $code-review to inspect the requested DelphiAPIStarterKit source or diff and report actionable findings."

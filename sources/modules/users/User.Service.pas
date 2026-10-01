@@ -2,32 +2,25 @@
 
 interface
 
-uses
-  System.Classes,
-  FireDAC.Comp.Client,
-  Web.HTTPApp,
-  User.Repository;
+uses System.Classes, System.SysUtils, System.JSON, FireDAC.Comp.Client, Web.HTTPApp, User.Repository, Auth.Policy;
 
 type
   TUserService = class(TPersistent)
   private
     FConnection: TFDConnection;
+    FRepository: TUserRepository;
+    FRequest: TWebRequest;
     FData: TFDMemTable;
     FParts: TArray<string>;
-    FRepository: TUserRepository;
     FStatusCode: Integer;
-    FWebRequest: TWebRequest;
-
-    function GetAuthenticatedUserID(out AUserID: string): Boolean;
-    function GenerateTemporaryPassword: string;
-    function InternalServerError: string;
+    function Actor(const APermission: string): TAuthActor;
+    function Target: string;
+    function UserReply(const AID: string; AStatus: Integer): string;
+    function LockTarget(const AActor: TAuthActor; const AID: string): Int64;
   public
-    constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
-      ARequest: TWebRequest; const AParts: TArray<string>);
+    constructor Create(AConnection: TFDConnection; AData: TFDMemTable; ARequest: TWebRequest; const AParts: TArray<string>);
     destructor Destroy; override;
-
     property StatusCode: Integer read FStatusCode;
-
   published
     function ChangePassword: string;
     function Delete: string;
@@ -39,29 +32,19 @@ type
 
 implementation
 
-uses
-  System.SysUtils,
-  Data.DB,
-  BFA.Core.Response,
-  BFA.Helper.Strings,
-  BFA.Helper.Transaction,
-  BFA.Helper.Validator,
-  BFA.Security.Token,
-  User.DTO,
-  User.Validator;
-
-{ TUserService }
+uses BFA.Core.Response, BFA.Core.Request, BFA.Security.Token, BFA.Security.Crypto, BFA.Helper.Strings,
+  Auth.Service, Auth.Validator, Auth.Settings, User.Validator, User.DTO;
 
 constructor TUserService.Create(AConnection: TFDConnection; AData: TFDMemTable;
   ARequest: TWebRequest; const AParts: TArray<string>);
 begin
   inherited Create;
   FConnection := AConnection;
+  FRequest := ARequest;
   FData := AData;
-  FWebRequest := ARequest;
   FParts := AParts;
   FStatusCode := 500;
-  FRepository := TUserRepository.Create(FConnection);
+  FRepository := TUserRepository.Create(AConnection);
 end;
 
 destructor TUserService.Destroy;
@@ -70,367 +53,215 @@ begin
   inherited;
 end;
 
-function TUserService.ChangePassword: string;
-var
-  LRequest: TUserChangePasswordRequest;
-  LMessage: string;
-  LUserID: string;
-  LDataset: TFDQuery;
-  LCurrentPassHash: string;
-  LNewPassHash: string;
+function TUserService.Actor(const APermission: string): TAuthActor;
 begin
-  if not TUserValidator.ValidateChangePassword(FData, LRequest, LMessage) then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
-  end;
+  Result := FRepository.ResolveActor(TSecurityToken.ExtractAccessToken(FRequest));
+  Result.RequirePermission(APermission);
+end;
 
-  if not GetAuthenticatedUserID(LUserID) then begin
-    FStatusCode := 401;
-    Exit(THelperResponse.CreateResponse(FStatusCode, 'Session expired or invalid', FData));
-  end;
+function TUserService.Target: string;
+begin
+  if Length(FParts) < 4 then raise ERequestInvalid.Create('Target required.');
+  Result := FParts[3];
+  TAuthValidator.UUID(Result);
+end;
 
-  LDataset := FRepository.FindActiveUserByID(LUserID);
+function TUserService.LockTarget(const AActor: TAuthActor; const AID: string): Int64;
+var LQuery, LLocked: TFDQuery;
+begin
+  LQuery := FRepository.FindUserByID(AID);
   try
-    if LDataset.IsEmpty then begin
-      FStatusCode := 404;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'User not found', FData));
-    end;
-
-    LCurrentPassHash := LDataset.FieldByName('password_hash').AsString;
+    if LQuery.IsEmpty then raise EAuthPolicy.Create(404, 'User not found.');
+    Result := LQuery.FieldByName('id').AsLargeInt;
   finally
-    FreeAndNil(LDataset);
+    FreeAndNil(LQuery);
   end;
-
-  if LCurrentPassHash <> TGlobalFunction.HashHMAC256(LRequest.OldPassword) then begin
-    FStatusCode := 401;
-    Exit(THelperResponse.CreateResponse(FStatusCode, 'Old password invalid', FData));
-  end;
-
-  LNewPassHash := TGlobalFunction.HashHMAC256(LRequest.NewPassword);
-  if LNewPassHash = LCurrentPassHash then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, 'New password must be different', FData));
-  end;
-
+  LLocked := FRepository.LockUser(Result);
   try
-    FConnection.StartTransaction;
-    try
-      FRepository.UpdatePassword(LUserID, LNewPassHash);
-      FConnection.Commit;
-    except
-      on E: Exception do begin
-        THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
-      end;
-    end;
-
-    FStatusCode := 200;
-    Result := THelperResponse.CreateResponse(FStatusCode, 'Password updated', FData);
-  except
-    on E: Exception do
-      Result := InternalServerError;
+    if not LLocked.FieldByName('deleted_at').IsNull then raise EAuthPolicy.Create(404, 'User not found.');
+    FRepository.RequireTarget(AActor, Result, LLocked.FieldByName('role_internal_id').AsInteger);
+  finally
+    FreeAndNil(LLocked);
   end;
 end;
 
-function TUserService.Delete: string;
-var
-  LUserID: string;
-  LMessage: string;
-  LRowsAffected: Integer;
+function TUserService.UserReply(const AID: string; AStatus: Integer): string;
+var LData: TJSONArray;
 begin
-  if not THelperValidator.ExtractRouteUserID(FParts, LUserID, LMessage) then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
-  end;
-
+  LData := FRepository.GetUsers(AID, 1, 0);
   try
-    FConnection.StartTransaction;
-    try
-      LRowsAffected := FRepository.SoftDeleteUser(LUserID);
-      if LRowsAffected = 0 then begin
-        THelperTransaction.Rollback(FConnection);
-        FStatusCode := 404;
-        Exit(THelperResponse.CreateResponse(FStatusCode, 'User not found', FData));
-      end;
-      FConnection.Commit;
-    except
-      on E: Exception do begin
-        THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
-      end;
-    end;
-
-    FStatusCode := 200;
-    Result := THelperResponse.CreateResponse(FStatusCode, 'User deleted', FData);
-  except
-    on E: Exception do
-      Result := InternalServerError;
+    FStatusCode := AStatus;
+    Result := THelperResponse.CreateResponse(AStatus, 'OK', LData);
+  finally
+    FreeAndNil(LData);
   end;
 end;
 
 function TUserService.Get: string;
-var
-  LDataset: TFDQuery;
-  LUserID: string;
+var LActor: TAuthActor; LID: string; LData: TJSONArray; LLimit, LOffset: Integer;
 begin
-  LUserID := '';
-  if Length(FParts) >= 4 then
-    LUserID := Trim(FParts[3]);
-
-  LDataset := FRepository.GetUsers(LUserID);
+  LActor := Actor('users.read');
+  LID := '';
+  if Length(FParts) = 4 then LID := Target;
+  LLimit := TAuthValidator.PageValue(FRequest, 'limit', 50, 100);
+  LOffset := TAuthValidator.PageValue(FRequest, 'offset', 0, 100000);
+  LData := FRepository.GetUsers(LID, LLimit, LOffset);
   try
-    if LDataset.IsEmpty then begin
-      FStatusCode := 404;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'User not found', FData));
-    end;
-
+    if (LID <> '') and (LData.Count = 0) then raise EAuthPolicy.Create(404, 'User not found.');
     FStatusCode := 200;
-    Result := THelperResponse.CreateResponse(FStatusCode, 'OK', LDataset, FData);
+    Result := THelperResponse.CreateResponse(200, 'OK', LData);
   finally
-    FreeAndNil(LDataset);
+    FreeAndNil(LData);
   end;
-end;
-
-function TUserService.GetAuthenticatedUserID(out AUserID: string): Boolean;
-var
-  LAccessToken: string;
-  LDataset: TFDQuery;
-begin
-  Result := False;
-  AUserID := '';
-
-  LAccessToken := TSecurityToken.ExtractAccessToken(FWebRequest);
-  if LAccessToken = '' then
-    Exit;
-
-  LDataset := FRepository.FindAuthUserByTokenHash(
-    TGlobalFunction.HashHMAC256(LAccessToken)
-  );
-  try
-    if LDataset.IsEmpty then
-      Exit;
-
-    AUserID := LDataset.FieldByName('user_id').AsString;
-    Result := AUserID <> '';
-  finally
-    FreeAndNil(LDataset);
-  end;
-end;
-
-function TUserService.GenerateTemporaryPassword: string;
-begin
-  Result := Copy(TGlobalFunction.NewUUIDCompact + TGlobalFunction.NewUUIDCompact, 1, 24);
 end;
 
 function TUserService.Insert: string;
-var
-  LRequest: TUserCreateRequest;
-  LMessage: string;
-  LDataset: TFDQuery;
-  LPasswordHash: string;
-  LResponseData: TStringList;
-  LUserID: string;
+var LActor: TAuthActor; LRequest: TUserCreateRequest; LHash, LID, LSetup, LSlot: string; LInternalID: Int64;
+  LData: TJSONArray;
 begin
-  if not TUserValidator.ValidateCreate(FData, LRequest, LMessage) then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
+  LActor := Actor('users.create');
+  LRequest := TUserValidator.ValidateCreate(FRequest);
+  if LRequest.HasRoleID then begin
+    LActor.RequireRecent;
+    LActor.RequirePermission('users.assign_role');
+    FRepository.RequireDelegation(LActor, LRequest.RoleID);
   end;
-
-  LDataset := FRepository.FindUserByUsername(LRequest.Username);
+  if not FRepository.Admit(LActor.Username, TAuthValidator.Origin(FRequest)) then
+    raise EAuthPolicy.Create(429, 'Authentication rate limit exceeded.');
+  LSetup := '';
+  if LRequest.Password = '' then begin
+    LRequest.Password := TSecurityCrypto.NewCredential;
+    LSetup := TSecurityCrypto.NewCredential;
+  end;
+  LSlot := FRepository.AcquireKDF;
   try
-    if not LDataset.IsEmpty then begin
-      FStatusCode := 409;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'Username already exists', FData));
-    end;
+    LHash := TSecurityCrypto.HashPassword(LRequest.Password);
   finally
-    FreeAndNil(LDataset);
+    FRepository.ReleaseKDF(LSlot);
   end;
-
-  LUserID := TGlobalFunction.NewDatabaseUUID;
-  LPasswordHash := TGlobalFunction.HashHMAC256(LRequest.Password);
-
+  LID := TGlobalFunction.NewDatabaseUUID;
+  FRepository.BeginSecurityTransaction;
   try
-    FConnection.StartTransaction;
+    LActor := Actor('users.create');
+    if LRequest.HasRoleID then begin
+      LActor.RequireRecent;
+      FRepository.RequireDelegation(LActor, LRequest.RoleID);
+    end;
+    LInternalID := FRepository.CreateUser(LID, LRequest, LHash);
+    if LSetup <> '' then FRepository.RecoveryToken(LInternalID, LActor.UserInternalID, 'account_setup', LSetup);
+    FRepository.Audit('user_create', 'success', LActor, LID, TAuthValidator.Origin(FRequest));
+    LData := FRepository.GetUsers(LID, 1, 0);
     try
-      FRepository.CreateUser(LUserID, LRequest, LPasswordHash);
-      FConnection.Commit;
-    except
-      on E: Exception do begin
-        THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+      if LData.Count <> 1 then raise EAuthPolicy.Create(409, 'Mutation conflict.');
+      if LSetup <> '' then begin
+        TJSONObject(LData.Items[0]).AddPair('setup_token', LSetup);
+        TJSONObject(LData.Items[0]).AddPair('expires_in', TJSONNumber.Create(TAuthSettings.RecoverySeconds));
       end;
-    end;
-
-    LResponseData := TUserDTO.CreateUserResponse(
-      LUserID,
-      LRequest.Username,
-      LRequest.Fullname,
-      LRequest.IsActive,
-      LRequest.HasRoleID,
-      LRequest.RoleID
-    );
-    try
       FStatusCode := 201;
-      Result := THelperResponse.CreateResponse(FStatusCode, 'User created', LResponseData);
+      Result := THelperResponse.CreateResponse(201, 'User created.', LData);
     finally
-      FreeAndNil(LResponseData);
+      FreeAndNil(LData);
     end;
+    FRepository.Commit;
   except
-    on E: Exception do
-      Result := InternalServerError;
+    FRepository.Rollback;
+    raise;
   end;
 end;
 
-function TUserService.InternalServerError: string;
+function TUserService.Update: string;
+var LActor: TAuthActor; LRequest: TUserUpdateRequest; LID: Int64;
 begin
-  FStatusCode := 500;
-  Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
+  LActor := Actor('users.update');
+  LRequest := TUserValidator.ValidateUpdate(FRequest, Target);
+  FRepository.BeginSecurityTransaction;
+  try
+    LActor := Actor('users.update');
+    if LRequest.HasRoleID or LRequest.HasIsActive then LActor.RequireRecent;
+    if LRequest.HasRoleID then begin
+      LActor.RequirePermission('users.assign_role');
+      FRepository.RequireDelegation(LActor, LRequest.RoleID);
+    end;
+    LID := LockTarget(LActor, LRequest.UserID);
+    FRepository.UpdateUser(LRequest);
+    if LRequest.HasRoleID or LRequest.HasIsActive then begin
+      FRepository.RevokeUser(LID, 'user_security_change');
+      FRepository.RevokeRecovery(LID, 'user_security_change');
+      FRepository.ProtectLastAdmin;
+    end;
+    FRepository.Audit('user_update', 'success', LActor, LRequest.UserID, TAuthValidator.Origin(FRequest));
+    Result := UserReply(LRequest.UserID, 200);
+    FRepository.Commit;
+  except
+    FRepository.Rollback;
+    raise;
+  end;
+end;
+
+function TUserService.Delete: string;
+var LActor: TAuthActor; LTarget: string; LID: Int64;
+begin
+  LTarget := Target;
+  FRepository.BeginSecurityTransaction;
+  try
+    LActor := Actor('users.delete');
+    LActor.RequireRecent;
+    LID := LockTarget(LActor, LTarget);
+    FRepository.SoftDeleteUser(LID);
+    FRepository.RevokeUser(LID, 'user_delete');
+    FRepository.RevokeRecovery(LID, 'user_delete');
+    FRepository.ProtectLastAdmin;
+    FRepository.Audit('user_delete', 'success', LActor, LTarget, TAuthValidator.Origin(FRequest));
+    FRepository.Commit;
+  except
+    FRepository.Rollback;
+    raise;
+  end;
+  FStatusCode := 200;
+  Result := THelperResponse.CreateResponse(200, 'OK', TJSONArray(nil));
 end;
 
 function TUserService.ResetPassword: string;
-var
-  LRequest: TUserResetPasswordRequest;
-  LMessage: string;
-  LRequesterID: string;
-  LDataset: TFDQuery;
-  LResponseData: TStringList;
-  LTemporaryPassword: string;
+var LActor: TAuthActor; LTarget, LToken: string; LID: Int64; LTTL: Integer; LData: TJSONArray; LRow: TJSONObject;
 begin
-  if not TUserValidator.ValidateResetPassword(FData, FParts, LRequest, LMessage) then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
-  end;
-
-  if not GetAuthenticatedUserID(LRequesterID) then begin
-    FStatusCode := 401;
-    Exit(THelperResponse.CreateResponse(FStatusCode, 'Session expired or invalid', FData));
-  end;
-
-  LDataset := FRepository.FindUserByID(LRequest.TargetUserID);
+  LTarget := Target;
+  TUserValidator.ValidateResetPassword(FRequest);
+  LToken := TSecurityCrypto.NewCredential;
+  FRepository.BeginSecurityTransaction;
   try
-    if LDataset.IsEmpty then begin
-      FStatusCode := 404;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'User not found', FData));
-    end;
-  finally
-    FreeAndNil(LDataset);
-  end;
-
-  LTemporaryPassword := GenerateTemporaryPassword;
-
-  try
-    FConnection.StartTransaction;
-    try
-      FRepository.UpdatePassword(
-        LRequest.TargetUserID,
-        TGlobalFunction.HashHMAC256(LTemporaryPassword)
-      );
-      FConnection.Commit;
-    except
-      on E: Exception do begin
-        THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
-      end;
-    end;
-
-    LResponseData := TUserDTO.CreateResetPasswordResponse(
-      LRequest.TargetUserID,
-      LRequesterID,
-      LTemporaryPassword
-    );
-    try
-      FStatusCode := 200;
-      Result := THelperResponse.CreateResponse(FStatusCode, 'Password reset',
-        LResponseData);
-    finally
-      FreeAndNil(LResponseData);
-    end;
+    LActor := Actor('users.reset_password');
+    LActor.RequireRecent;
+    LID := LockTarget(LActor, LTarget);
+    LTTL := FRepository.RecoveryToken(LID, LActor.UserInternalID, 'password_reset', LToken);
+    FRepository.Audit('password_reset_issue', 'success', LActor, LTarget, TAuthValidator.Origin(FRequest));
+    FRepository.Commit;
   except
-    on E: Exception do
-      Result := InternalServerError;
+    FRepository.Rollback;
+    raise;
+  end;
+  LData := TJSONArray.Create;
+  try
+    LRow := TJSONObject.Create;
+    LData.AddElement(LRow);
+    LRow.AddPair('user_id', LTarget);
+    LRow.AddPair('reset_token', LToken);
+    LRow.AddPair('expires_in', TJSONNumber.Create(LTTL));
+    FStatusCode := 200;
+    Result := THelperResponse.CreateResponse(200, 'OK', LData);
+  finally
+    FreeAndNil(LData);
   end;
 end;
 
-
-function TUserService.Update: string;
-var
-  LRequest: TUserUpdateRequest;
-  LMessage: string;
-  LDataset: TFDQuery;
-  LPasswordHash: string;
-  LResponseData: TStringList;
-  LUsername: string;
-  LFullname: string;
-  LIsActive: Integer;
-  LHasRoleID: Boolean;
-  LRoleID: Integer;
+function TUserService.ChangePassword: string;
+var LService: TAuthService;
 begin
-  if not TUserValidator.ValidateUpdate(FData, FParts, LRequest, LMessage) then begin
-    FStatusCode := 400;
-    Exit(THelperResponse.CreateResponse(FStatusCode, LMessage, FData));
-  end;
-
-  LDataset := FRepository.FindUserByID(LRequest.UserID);
+  LService := TAuthService.Create(FConnection, FData, FRequest);
   try
-    if LDataset.IsEmpty then begin
-      FStatusCode := 404;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'User not found', FData));
-    end;
-
-    LUsername := LDataset.FieldByName('username').AsString;
-    LFullname := LDataset.FieldByName('fullname').AsString;
-    LIsActive := LDataset.FieldByName('is_active').AsInteger;
-    LHasRoleID := not LDataset.FieldByName('role_internal_id').IsNull;
-    if LHasRoleID then
-      LRoleID := LDataset.FieldByName('role_internal_id').AsInteger
-    else
-      LRoleID := 0;
+    Result := LService.ChangePassword;
+    FStatusCode := LService.StatusCode;
   finally
-    FreeAndNil(LDataset);
-  end;
-
-  LPasswordHash := '';
-  if LRequest.HasPassword then
-    LPasswordHash := TGlobalFunction.HashHMAC256(LRequest.Password);
-
-  try
-    FConnection.StartTransaction;
-    try
-      FRepository.UpdateUser(LRequest, LPasswordHash);
-      FConnection.Commit;
-    except
-      on E: Exception do begin
-        THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
-      end;
-    end;
-
-    if LRequest.HasFullname then
-      LFullname := LRequest.Fullname;
-    if LRequest.HasIsActive then
-      LIsActive := LRequest.IsActive;
-    if LRequest.HasRoleID then begin
-      LRoleID := LRequest.RoleID;
-      LHasRoleID := True;
-    end;
-
-    LResponseData := TUserDTO.CreateUserResponse(
-      LRequest.UserID,
-      LUsername,
-      LFullname,
-      LIsActive,
-      LHasRoleID,
-      LRoleID
-    );
-    try
-      FStatusCode := 200;
-      Result := THelperResponse.CreateResponse(FStatusCode, 'User updated', LResponseData);
-    finally
-      FreeAndNil(LResponseData);
-    end;
-  except
-    on E: Exception do
-      Result := InternalServerError;
+    FreeAndNil(LService);
   end;
 end;
 

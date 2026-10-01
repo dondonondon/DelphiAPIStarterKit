@@ -43,60 +43,36 @@ type
 
 implementation
 
-uses BFA.Core.Response, Xml.XMLIntf, Xml.XMLDoc;
+uses BFA.Core.Response, BFA.Core.Request, Data.FmtBcd, System.RegularExpressions, System.Math, Xml.XMLIntf, Xml.XMLDoc;
 
 const
-  DEFAULT_STRING_SIZE = 250000;
+  DEFAULT_STRING_SIZE = 16384;
 
-function TMemoryTableHelper.LoadFromJSON(AJSON: String;
-  AFillDataIfFail: Boolean; ADecodeString: Boolean): Boolean;
-var
-  JObjectData: TJSONObject;
-  JArrayData: TJSONArray;
-  JSONType: TTypeJSON;
+function TMemoryTableHelper.LoadFromJSON(AJSON: String; AFillDataIfFail: Boolean; ADecodeString: Boolean): Boolean;
+var LValue: TJSONValue;
 begin
   Result := False;
-  JObjectData := nil;
-  JArrayData := nil;
-
-  if THelperMemoryTable.IsEmpty(Self, AJSON, AFillDataIfFail) then Exit;
-
-  JSONType := THelperMemoryTable.GetType(AJSON);
+  LValue := nil;
   try
-    if JSONType = None then begin
-      THelperMemoryTable.FillErrorData(Self, 'Invalid JSON : ' + AJSON, AFillDataIfFail);
-      Exit;
-    end;
-
-    if JSONType = ObjectData then begin
-      JObjectData := TJSONObject.ParseJSONValue(AJSON) as TJSONObject;
-      if not Assigned(JObjectData) then begin
-        THelperMemoryTable.FillErrorData(Self, 'Invalid JSON : ' + AJSON, AFillDataIfFail);
-        Exit;
-      end;
-      THelperMemoryTable.CreateDataset(Self, JObjectData);
-    end;
-    if JSONType = ArrayData then begin
-      JArrayData := TJSONObject.ParseJSONValue(AJSON) as TJSONArray;
-      if not Assigned(JArrayData) then begin
-        THelperMemoryTable.FillErrorData(Self, 'Invalid JSON : ' + AJSON, AFillDataIfFail);
-        Exit;
-      end;
-      THelperMemoryTable.CreateDataset(Self, JArrayData);
-    end;
-
     try
-      if JSONType = ArrayData then THelperMemoryTable.FillDataset(Self, JArrayData, ADecodeString)
-      else if JSONType = ObjectData then THelperMemoryTable.FillDataset(Self, JObjectData, ADecodeString);
-
+      LValue := THelperRequest.ParseJSON(AJSON);
+      if LValue is TJSONObject then begin
+        THelperMemoryTable.CreateDataset(Self, TJSONObject(LValue));
+        THelperMemoryTable.FillDataset(Self, TJSONObject(LValue), ADecodeString);
+      end else if LValue is TJSONArray then begin
+        THelperMemoryTable.CreateDataset(Self, TJSONArray(LValue));
+        if TJSONArray(LValue).Count > 0 then THelperMemoryTable.FillDataset(Self, TJSONArray(LValue), ADecodeString);
+      end else raise ERequestInvalid.Create('JSON object or object array required.');
+      if Active then First;
       Result := True;
-    except on E: Exception do
-      THelperMemoryTable.FillErrorData(Self, 'Error parse JSON : ' + E.Message, AFillDataIfFail);
+    except
+      on E: ERequestInvalid do begin
+        THelperMemoryTable.CloseAndClear(Self);
+        if AFillDataIfFail then THelperMemoryTable.FillErrorData(Self, 'Invalid JSON.');
+      end;
     end;
   finally
-    FreeAndNil(JArrayData);
-    FreeAndNil(JObjectData);
-    if not Self.IsEmpty then Self.First;
+    FreeAndNil(LValue);
   end;
 end;
 
@@ -121,7 +97,7 @@ begin
       Result := Self.Active;
       if Result then Result := not Self.IsEmpty;
     except on E : Exception do
-      THelperMemoryTable.FillErrorData(Self, 'Invalid JSON : ' + E.Message);
+      THelperMemoryTable.FillErrorData(Self, 'Invalid dataset JSON.');
     end;
   finally
     FreeAndNil(LStringStream);
@@ -287,9 +263,12 @@ begin
   LFieldDef.Name := AFieldName;
   LFieldDef.DataType := AFieldType;
 
-  if AFieldType = ftString then begin
+  if AFieldType in [ftString, ftWideString] then begin
     if ASize <= 0 then ASize := DEFAULT_STRING_SIZE;
     LFieldDef.Size := ASize;
+  end else if AFieldType = ftFMTBcd then begin
+    LFieldDef.Precision := 32;
+    LFieldDef.Size := 14;
   end;
 end;
 
@@ -316,93 +295,53 @@ begin
   ADataset.FieldDefs.Clear;
 end;
 
-class procedure THelperMemoryTable.CreateDataset(ADataset: TFDMemTable;
-  AJSONData: TJSONArray);
-var
-  ArrFields : array of record
-    FieldType : TFieldType;
-    Size : Integer;
-    Name : String;
-  end;
-
-  JObjectData: TJSONObject;
-  LJSONPair: TJSONPair;
-  Index: Integer;
-  LSize: Integer;
+class procedure THelperMemoryTable.CreateDataset(ADataset: TFDMemTable; AJSONData: TJSONArray);
+var LRow: TJSONValue; LPair: TJSONPair; LDef: TFieldDef; LType: TFieldType; LIndex: Integer;
 begin
   CloseAndClear(ADataset);
-
-  if not Assigned(AJSONData) then
-    raise EArgumentNilException.Create('JSON array is required.');
-
-  if AJSONData.Count = 0 then begin
-    ADataset.Open;
-    Exit;
-  end;
-
-  if not (AJSONData.Items[0] is TJSONObject) then
-    raise EInvalidOperation.Create('JSON array must contain objects.');
-
-  JObjectData := TJSONObject(AJSONData.Items[0]);
-  SetLength(ArrFields, JObjectData.Count);
-
-  for var i := 0 to AJSONData.Count - 1 do begin
-    if not (AJSONData.Items[i] is TJSONObject) then
-      raise EInvalidOperation.Create('JSON array must contain objects.');
-
-    JObjectData := TJSONObject(AJSONData.Items[i]);
-
-    Index := 0;
-    for LJSONPair in JObjectData do begin
-      if Index >= Length(ArrFields) then Break;
-
-      ArrFields[Index].Name := LJSONPair.JsonString.Value;
-
-      if ArrFields[Index].FieldType <> ftString then begin
-        ArrFields[Index].FieldType := GetJSONFieldType(LJSONPair.JsonValue);
-        if ArrFields[Index].FieldType = ftString then
-          ArrFields[Index].Size := CalculateStringSize(LJSONPair.JsonValue);
+  if not Assigned(AJSONData) then raise ERequestInvalid.Create('JSON array required.');
+  if AJSONData.Count = 0 then Exit;
+  for LRow in AJSONData do begin
+    if not (LRow is TJSONObject) then raise ERequestInvalid.Create('JSON array must contain objects.');
+    for LPair in TJSONObject(LRow) do begin
+      LType := GetJSONFieldType(LPair.JsonValue);
+      LIndex := ADataset.FieldDefs.IndexOf(LPair.JsonString.Value);
+      if LIndex < 0 then begin
+        if ADataset.FieldDefs.Count >= 32 then raise ERequestInvalid.Create('Too many union fields.');
+        AddFieldDef(ADataset, LPair.JsonString.Value, LType, CalculateStringSize(LPair.JsonValue));
       end else begin
-        LSize := CalculateStringSize(LJSONPair.JsonValue);
-        if ArrFields[Index].Size < LSize then ArrFields[Index].Size := LSize;
+        LDef := ADataset.FieldDefs[LIndex];
+        if LDef.Name <> LPair.JsonString.Value then raise ERequestInvalid.Create('Inconsistent field name casing.');
+        if LDef.DataType = ftUnknown then begin
+          LDef.DataType := LType;
+          if LType = ftFMTBcd then begin LDef.Precision := 32; LDef.Size := 14; end;
+        end else if (LType <> ftUnknown) and (LType <> LDef.DataType) then
+          raise ERequestInvalid.Create('Conflicting JSON field types.');
+        if LType = ftWideString then LDef.Size := Max(LDef.Size, CalculateStringSize(LPair.JsonValue));
       end;
-
-      if IsNestedValue(LJSONPair.JsonValue) then begin
-        if ArrFields[Index].FieldType <> ftString then begin
-          ArrFields[Index].FieldType := ftString;
-          ArrFields[Index].Size := CalculateStringSize(LJSONPair.JsonValue);
-        end;
-      end;
-
-      Inc(Index);
     end;
   end;
-
-  for var i := 0 to Length(ArrFields) - 1 do begin
-    LSize := ArrFields[i].Size;
-    if LSize = 0 then LSize := DEFAULT_STRING_SIZE;
-    AddFieldDef(ADataset, ArrFields[i].Name, ArrFields[i].FieldType, LSize);
+  if ADataset.FieldDefs.Count = 0 then raise ERequestInvalid.Create('Object rows require at least one field.');
+  for LIndex := 0 to ADataset.FieldDefs.Count - 1 do begin
+    LDef := ADataset.FieldDefs[LIndex];
+    if LDef.DataType = ftUnknown then begin LDef.DataType := ftWideString; LDef.Size := 1; end;
   end;
-
-  ADataset.Open;
+  ADataset.CreateDataSet;
 end;
 
-class procedure THelperMemoryTable.CreateDataset(ADataset: TFDMemTable;
-  AJSONData: TJSONObject);
-var
-  LJSONPair: TJSONPair;
+class procedure THelperMemoryTable.CreateDataset(ADataset: TFDMemTable; AJSONData: TJSONObject);
+var LPair: TJSONPair; LType: TFieldType;
 begin
   CloseAndClear(ADataset);
-
-  if not Assigned(AJSONData) then
-    raise EArgumentNilException.Create('JSON object is required.');
-
-  for LJSONPair in AJSONData do begin
-    AddFieldDef(ADataset, LJSONPair.JsonString.Value, GetJSONFieldType(LJSONPair.JsonValue),
-      CalculateStringSize(LJSONPair.JsonValue));
+  if not Assigned(AJSONData) then raise ERequestInvalid.Create('JSON object required.');
+  if AJSONData.Count = 0 then Exit;
+  for LPair in AJSONData do begin
+    if ADataset.FieldDefs.IndexOf(LPair.JsonString.Value) >= 0 then raise ERequestInvalid.Create('Duplicate field.');
+    LType := GetJSONFieldType(LPair.JsonValue);
+    if LType = ftUnknown then LType := ftWideString;
+    AddFieldDef(ADataset, LPair.JsonString.Value, LType, CalculateStringSize(LPair.JsonValue));
   end;
-
-  ADataset.Open;
+  ADataset.CreateDataSet;
 end;
 
 class procedure THelperMemoryTable.FillDataset(ADataset: TFDMemTable;
@@ -416,7 +355,7 @@ begin
 
   for var i := 0 to AJSONData.Count - 1 do begin
     if not (AJSONData.Items[i] is TJSONObject) then
-      raise EInvalidOperation.Create('JSON array must contain objects.');
+      raise ERequestInvalid.Create('JSON array must contain objects.');
 
     JObjectData := TJSONObject(AJSONData.Items[i]);
     ADataset.Append;
@@ -441,6 +380,7 @@ begin
   if not Assigned(AJSONData) then
     raise EArgumentNilException.Create('JSON object is required.');
 
+  if AJSONData.Count = 0 then Exit;
   ADataset.Append;
   try
     for var ii := 0 to ADataset.FieldDefs.Count - 1 do begin
@@ -475,14 +415,23 @@ begin
 end;
 
 class function THelperMemoryTable.GetJSONFieldType(AValue: TJSONValue): TFieldType;
+var LInteger: Int64; LParts: TArray<string>; LText: string;
 begin
-  Result := ftString;
-  if not Assigned(AValue) then Exit;
-
-  if AValue is TJSONNumber then
-    Result := ftFloat
-  else if (AValue is TJSONTrue) or (AValue is TJSONFalse) then
-    Result := ftBoolean;
+  Result := ftUnknown;
+  if not Assigned(AValue) or (AValue is TJSONNull) then Exit;
+  if AValue is TJSONString then Exit(ftWideString);
+  if (AValue is TJSONBool) or (AValue is TJSONTrue) or (AValue is TJSONFalse) then Exit(ftBoolean);
+  if not (AValue is TJSONNumber) then raise ERequestInvalid.Create('Nested fields require an explicit JSON contract.');
+  LText := AValue.Value;
+  if TRegEx.IsMatch(LText, '^-?(0|[1-9][0-9]*)$') then begin
+    if not TryStrToInt64(LText, LInteger) then raise ERequestInvalid.Create('Integer exceeds Int64.');
+    Exit(ftLargeint);
+  end;
+  if not TRegEx.IsMatch(LText, '^-?(0|[1-9][0-9]*)\.[0-9]+$') then
+    raise ERequestInvalid.Create('Decimal exponent notation is unsupported.');
+  LParts := LText.TrimLeft(['-']).Split(['.']);
+  if (Length(LParts[0]) > 18) or (Length(LParts[1]) > 14) then raise ERequestInvalid.Create('Decimal precision exceeds limit.');
+  Result := ftFMTBcd;
 end;
 
 class function THelperMemoryTable.GetType(AJSON: String): TTypeJSON;
@@ -526,33 +475,18 @@ begin
     Result := AValue.Value;
 end;
 
-class procedure THelperMemoryTable.WriteJSONField(AField: TField;
-  AValue: TJSONValue; ADecodeString: Boolean);
-var
-  LJSONType: TTypeJSON;
+class procedure THelperMemoryTable.WriteJSONField(AField: TField; AValue: TJSONValue; ADecodeString: Boolean);
 begin
   if not Assigned(AField) then Exit;
-
-  if not Assigned(AValue) then begin
-    AField.Clear;
-    Exit;
-  end;
-
-  LJSONType := GetType(AValue.ToJSON);
-
-  if ADecodeString then begin
-    if LJSONType = None then begin
-      if AField.DataType = ftString then
-        AField.AsString := AValue.Value;
-    end else begin
-      AField.AsString := AValue.ToJSON;
-    end;
-  end else begin
-    if LJSONType = None then
-      AField.AsString := AValue.Value
-    else
-      AField.AsString := AValue.ToJSON;
+  if not Assigned(AValue) or (AValue is TJSONNull) then begin AField.Clear; Exit; end;
+  case AField.DataType of
+    ftWideString: AField.AsWideString := AValue.Value;
+    ftLargeint: AField.AsLargeInt := StrToInt64(AValue.Value);
+    ftFMTBcd: TFMTBCDField(AField).AsBCD := StrToBcd(AValue.Value, TFormatSettings.Invariant);
+    ftBoolean: AField.AsBoolean := SameText(AValue.Value, 'true');
+  else raise ERequestInvalid.Create('Unsupported JSON field type.');
   end;
 end;
+
 
 end.
