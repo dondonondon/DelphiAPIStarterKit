@@ -98,6 +98,23 @@ POOL_ExpireTimeout=300000
 
 Gunakan `config.example.ini` sebagai template. Jangan commit `config.ini` asli.
 
+Database dan security memakai satu resolver konfigurasi. Isi `DELPHI_API_CONFIG` dengan path absolut ke file yang ada, atau letakkan `config.ini` di samping executable. Jika path eksplisit tidak diberikan dan file di samping executable tidak ada, current directory saat startup menjadi fallback kompatibilitas. Path eksplisit yang tidak valid menghentikan startup, termasuk ketika environment setting sudah tersedia. Environment tiap setting tetap memiliki prioritas di atas file.
+
+HMAC secret divalidasi dan disimpan di memori sebelum listener aktif. Restart proses setelah perubahan konfigurasi atau secret; algoritma hashing token/password tetap sama. Tanpa path konfigurasi eksplisit atau secret environment, secret Linux lama yang tidak kosong di `/var/lib/<nama-executable>/config.ini` tetap diprioritaskan di atas file utama default agar key token/password tidak berubah diam-diam. Gunakan `DELPHI_API_CONFIG` atau environment secret untuk memilih sumber baru secara eksplisit. Deployment baru sebaiknya memakai file konfigurasi bersama atau environment.
+
+### Kompresi HTTP gzip
+
+Kompresi HTTP JSON memakai nilai default berikut pada `config.ini` yang sama:
+
+```ini
+[HTTP]
+GzipEnabled=True
+GzipMinimumBytes=1024
+GzipLevel=1
+```
+
+Gzip dipakai ketika client menerimanya dan body UTF-8 mencapai batas minimum (1024 byte = 1 KiB). Level 1-9 menukar waktu CPU dengan rasio kompresi; level 1 mengutamakan kecepatan. Respons kecil dan hasil yang membesar tetap tanpa kompresi. Setting dibaca sekali dan memerlukan restart. Lihat [petunjuk benchmark gzip](docs/k6/benchmark.md#perbandingan-gzip-dan-identity).
+
 ### Import Schema via MySQL CLI
 
 Buat database:
@@ -193,24 +210,41 @@ atau letakkan folder DLL di `PATH` Windows.
 Jika menjalankan dari IDE dan current directory berbeda, pastikan `VendorHome` mengarah ke folder yang berisi DLL. Saat ini Windows runtime code mengisi:
 
 ```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
+DM.FDPhysMySQLDriverLink.VendorHome := ExtractFilePath(ExpandFileName(ParamStr(0)));
 ```
 
-Artinya aplikasi akan mencari client library berdasarkan current directory. Jika DLL disimpan di folder khusus, sesuaikan `VendorHome` di startup code.
+Windows memakai direktori executable sebagai default. Gunakan `[Database] VendorHome` / `VendorLib` atau `DELPHI_API_DB_VENDOR_HOME` / `DELPHI_API_DB_VENDOR_LIB` untuk lokasi client yang berbeda. Gunakan path absolut; environment memiliki prioritas di atas file.
 
 Rekomendasi untuk open-source repo: jangan commit `libmysql.dll` atau ZIP binary ke repository. Cukup dokumentasikan dependency dan cara install-nya.
+
+### Error SSL pada Windows dengan MySQL 8
+
+Jika FireDAC menampilkan `SSL connection error: unknown error number`, periksa versi client DLL yang benar-benar dimuat. Client lama yang memakai yaSSL hanya mendukung TLS 1.0/1.1, sehingga dapat gagal terhubung ke server yang menerima TLS 1.2/1.3 saja. `require_secure_transport=OFF` tidak menghentikan client mencoba koneksi TLS.
+
+Gunakan client x64 resmi dari [paket ZIP MySQL 8.4 untuk Windows](https://dev.mysql.com/downloads/mysql/8.4.html?os=3) beserta dependency OpenSSL dari paket yang sama. Untuk deployment Win64 dengan current directory `bin` dan `VendorHome` seperti di atas, layout yang sudah diuji adalah:
+
+```text
+bin/DelphiAPIStarterKit.exe
+bin/config.ini
+bin/lib/libmysql.dll
+bin/libcrypto-3-x64.dll
+bin/libssl-3-x64.dll
+```
+
+Hentikan aplikasi sebelum mengganti library dan cadangkan DLL lama. MySQL 8.4 x64 tidak dapat digunakan untuk build Win32. Jangan menurunkan versi TLS server sebagai solusi kompatibilitas client lama.
 
 ### Catatan Client Library Linux
 
 Untuk deployment Linux64, install MySQL/MariaDB client library di server target menggunakan package manager distro server atau package resmi vendor.
 
-Startup code Linux saat ini mengisi:
+Contoh override native library pada `config.ini` yang dipilih:
 
-```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
+```ini
+[Database]
+VendorLib=/usr/lib/x86_64-linux-gnu/libmysqlclient.so.21
 ```
 
-Jika server Linux Anda menyimpan client library di lokasi berbeda, sesuaikan `VendorHome` di `DelphiAPIStarterKit.dpr` atau ubah startup code agar path ini dibaca dari konfigurasi deployment.
+Linux mempertahankan `/usr/lib/x86_64-linux-gnu/libmysqlclient.so.21` sebagai default jika file tersebut ada; jika tidak, FireDAC memakai pencarian library normal. Atur `[Database] VendorHome` / `VendorLib` atau environment yang sesuai untuk distribusi dan layout client lain. Pesan startup menunjukkan listener aktif, bukan bukti konektivitas database.
 
 ## Build
 
@@ -272,6 +306,24 @@ Default local base URL:
 ```text
 http://localhost:9381
 ```
+
+## Benchmark Baca k6
+
+Pada 31 Oktober 2026, build Win64 Release diuji dengan k6 dan API pada host Windows yang sama; MySQL 8.4.11 berjalan pada host terpisah melalui jaringan. Pengujian memakai 30 virtual user tetap selama 60 detik, ditambah waktu penyelesaian, terhadap delapan endpoint GET list/detail User, Product, Category, dan Customer. Preflight menghasilkan 1 User, 8 Product, 5 Category, dan 100 Customer.
+
+| Metrik | Hasil |
+|---|---:|
+| Request, termasuk preflight | 13.992 |
+| Throughput gabungan | 229,82 request/detik |
+| Request gagal | 0% |
+| Pemeriksaan respons lulus | 118.932 / 118.932 |
+| HTTP rata-rata / p95 / p99 | 53,13 / 165,77 / 276,77 ms |
+| Durasi HTTP maksimum | 654,87 ms |
+| Iterasi selesai / terputus | 1.748 / 0 |
+
+Seluruh threshold lulus, termasuk p95 di bawah 500 ms untuk setiap endpoint. Customer list paling lambat, dengan rata-rata 135,05 ms dan p95 300,27 ms. Fase beban mengirim 1.748 request ke setiap endpoint. Metrik global mencakup preflight; throughput menggabungkan semua endpoint dan mengikuti jeda dalam skrip. Tes baca singkat ini belum membuktikan kapasitas maksimum atau ketahanan jangka panjang. Endpoint gambar, alur autentikasi, dan operasi tulis tidak diuji; jumlah baris berasal dari respons dan belum diverifikasi terpisah terhadap database.
+
+Lihat [panduan benchmark](docs/k6/benchmark.md) untuk profil beban, konfigurasi, dan interpretasi hasil.
 
 ## API Quickstart
 

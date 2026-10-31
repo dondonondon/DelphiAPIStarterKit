@@ -25,6 +25,7 @@ type
     class function BuildStoragePath(const ASubDirectory, AFileName: string): string;
     class function GetHMACSignatureSecret: string;
   public
+    class procedure InitializeSecurity;
     class procedure CreateBaseDirectory;
     class function GetBaseDirectory : String;
     class function LoadFile(AFileName : String) : String;
@@ -63,6 +64,60 @@ const
   HMAC_SECRET_NAME = 'HMACSecret';
 
 implementation
+
+uses
+  System.SyncObjs, BFA.Core.Config;
+
+var
+  GSecurityLock: TCriticalSection;
+  GSecurityInitialized: Boolean;
+  GHMACSignatureSecret: string;
+
+class procedure TGlobalFunction.InitializeSecurity;
+var
+  LSecret: string;
+  {$IF DEFINED(LINUX)}
+  LLegacyFileName: string;
+  LIni: TIniFile;
+  {$ENDIF}
+begin
+  GSecurityLock.Enter;
+  try
+    if GSecurityInitialized then
+      Exit;
+
+    TServerConfig.Initialize;
+    LSecret := Trim(GetEnvironmentVariable(HMAC_SECRET_ENV_NAME));
+
+    {$IF DEFINED(LINUX)}
+    // Preserve the existing key for Linux installations using legacy storage.
+    if (LSecret = '') and not TServerConfig.HasExplicitConfig then begin
+      LLegacyFileName := TPath.Combine(GetStorageBaseDirectory, 'config.ini');
+      if not SameFileName(LLegacyFileName, TServerConfig.ConfigFileName) and
+        FileExists(LLegacyFileName) then begin
+        LIni := TIniFile.Create(LLegacyFileName);
+        try
+          LSecret := Trim(LIni.ReadString(HMAC_SECRET_SECTION, HMAC_SECRET_NAME, ''));
+        finally
+          LIni.Free;
+        end;
+      end;
+    end;
+    {$ENDIF}
+
+    if LSecret = '' then
+      LSecret := TServerConfig.ReadString(HMAC_SECRET_SECTION, HMAC_SECRET_NAME, '');
+
+    if LSecret = '' then
+      raise Exception.CreateFmt('%s environment variable or [%s] %s in config.ini is required.',
+        [HMAC_SECRET_ENV_NAME, HMAC_SECRET_SECTION, HMAC_SECRET_NAME]);
+
+    GHMACSignatureSecret := LSecret;
+    GSecurityInitialized := True;
+  finally
+    GSecurityLock.Leave;
+  end;
+end;
 
 class function TGlobalFunction.Base64ToFile(const Base64Str,
   OutputFilePath: string): Boolean;
@@ -244,27 +299,10 @@ begin
 end;
 
 class function TGlobalFunction.GetHMACSignatureSecret: string;
-var
-  LConfigFileName: string;
-  LIni: TIniFile;
 begin
-  Result := Trim(GetEnvironmentVariable(HMAC_SECRET_ENV_NAME));
-  if Result <> '' then
-    Exit;
-
-  LConfigFileName := TPath.Combine(GetBaseDirectory, 'config.ini');
-  if FileExists(LConfigFileName) then begin
-    LIni := TIniFile.Create(LConfigFileName);
-    try
-      Result := Trim(LIni.ReadString(HMAC_SECRET_SECTION, HMAC_SECRET_NAME, ''));
-    finally
-      FreeAndNil(LIni);
-    end;
-  end;
-
-  if Result = '' then
-    raise Exception.CreateFmt('%s environment variable or [%s] %s in config.ini is required.',
-      [HMAC_SECRET_ENV_NAME, HMAC_SECRET_SECTION, HMAC_SECRET_NAME]);
+  if not GSecurityInitialized then
+    InitializeSecurity;
+  Result := GHMACSignatureSecret;
 end;
 
 class function TGlobalFunction.LoadFile(AFileName: String): String;
@@ -373,5 +411,11 @@ begin
     FreeAndNil(ini);
   end;
 end;
+
+initialization
+  GSecurityLock := TCriticalSection.Create;
+
+finalization
+  GSecurityLock.Free;
 
 end.

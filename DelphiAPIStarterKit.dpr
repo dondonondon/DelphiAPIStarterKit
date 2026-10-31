@@ -1,4 +1,4 @@
-﻿program DelphiAPIStarterKit;
+program DelphiAPIStarterKit;
 {$APPTYPE CONSOLE}
 
 uses
@@ -24,6 +24,7 @@ uses
   BFA.Core.Rest in 'sources\core\BFA.Core.Rest.pas',
   BFA.Core.Endpoint in 'sources\core\BFA.Core.Endpoint.pas',
   BFA.Core.Config in 'sources\core\BFA.Core.Config.pas',
+  BFA.HTTP.Compression in 'sources\infrastructure\http\BFA.HTTP.Compression.pas',
   RestAPI.User in 'sources\modules\users\RestAPI.User.pas',
   DB.ConnectionFactory in 'sources\infrastructure\database\DB.ConnectionFactory.pas',
   DB.Helper.Query in 'sources\infrastructure\database\DB.Helper.Query.pas',
@@ -191,28 +192,54 @@ end;
 
 procedure RunServer(APort: Integer);
 var
+  FormatBr: TFormatSettings;
   LServer: TIdHTTPWebBrokerBridge;
+  LVendorLib: string;
+  LVendorHome: string;
 //  LServer : TsgcWSHTTPWebBrokerBridgeServer;
 begin
+
+  FormatBr                     := TFormatSettings.Create;
+  FormatBr.DecimalSeparator    := '.';
+  FormatBr.ThousandSeparator   := ',';
+  FormatBr.DateSeparator       := '-';
+  FormatBr.TimeSeparator       := ':';
+  FormatBr.ShortDateFormat     := 'yyyy-mm-dd';
+  FormatBr.LongDateFormat      := 'yyyy-mm-dd hh:nn:ss';
+
+  System.SysUtils.FormatSettings := FormatBr;
+
+  TServerConfig.Initialize;
+  TGlobalFunction.InitializeSecurity;
+
   LServer := TIdHTTPWebBrokerBridge.Create(nil);
-  DM := TDM.Create(nil);
+  DM := nil;
   try
+    DM := TDM.Create(nil);
     LServer.DefaultPort := APort;
 
     if CheckPort(APort) = 0 then
       raise Exception.CreateFmt('Port %d already in use', [APort]);
 
-    try
-      TGlobalFunction.LoadFile('');
-      {$IF DEFINED (LINUX)}
-      DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
-      {$ELSE IF DEFINED (MSWINDOWS)}
-      DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
-      {$ENDIF}
-//      DM.Con.Connected := True;
-    except on E: Exception do
-      Writeln(E.Message);
-    end;
+    TGlobalFunction.LoadFile('');
+    {$IF DEFINED(LINUX)}
+    LVendorHome := '';
+    LVendorLib := '/usr/lib/x86_64-linux-gnu/libmysqlclient.so.21';
+    if not FileExists(LVendorLib) then
+      LVendorLib := '';
+    {$ELSE}
+    LVendorHome := ExtractFilePath(ExpandFileName(ParamStr(0)));
+    LVendorLib := '';
+    {$ENDIF}
+
+    LVendorHome := TServerConfig.ReadString('Database', 'VendorHome', LVendorHome);
+    LVendorLib := TServerConfig.ReadString('Database', 'VendorLib', LVendorLib);
+    if Trim(GetEnvironmentVariable('DELPHI_API_DB_VENDOR_HOME')) <> '' then
+      LVendorHome := Trim(GetEnvironmentVariable('DELPHI_API_DB_VENDOR_HOME'));
+    if Trim(GetEnvironmentVariable('DELPHI_API_DB_VENDOR_LIB')) <> '' then
+      LVendorLib := Trim(GetEnvironmentVariable('DELPHI_API_DB_VENDOR_LIB'));
+    DM.FDPhysMySQLDriverLink.VendorHome := LVendorHome;
+    DM.FDPhysMySQLDriverLink.VendorLib := LVendorLib;
 
     LServer.Bindings.Clear;
     LServer.Active := True;
@@ -234,9 +261,11 @@ begin
   try
     if WebRequestHandler <> nil then
       WebRequestHandler.WebModuleClass := WebModuleClass;
-    RunServer(9381);
+    RunServer(9999);
   except
-    on E: Exception do
+    on E: Exception do begin
       Writeln(E.ClassName, ': ', E.Message);
+      ExitCode := 1;
+    end;
   end
 end.

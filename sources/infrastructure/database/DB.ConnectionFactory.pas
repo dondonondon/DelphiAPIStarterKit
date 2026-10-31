@@ -8,7 +8,6 @@ uses
 type
   TDBConnectionFactory = class
   private
-    class function ConfigFileName: string; static;
     class function ReadDatabaseSetting(const AEnvName, AName, ADefaultValue: string): string; static;
     class function RequireDatabaseSetting(const AEnvName, AName: string): string; static;
   public
@@ -29,8 +28,7 @@ uses
   FireDAC.Comp.UI,
   FireDAC.Stan.Param,
   FireDAC.DApt,
-  System.IniFiles,
-  System.IOUtils;
+  BFA.Core.Config;
 
 const
   DB_CONNECTION_NAME = 'MyDB';
@@ -52,23 +50,24 @@ const
 
 { TDBConnectionFactory }
 
-class function TDBConnectionFactory.ConfigFileName: string;
-begin
-  Result := TPath.Combine(ExpandFileName(GetCurrentDir), 'config.ini');
-end;
-
 class function TDBConnectionFactory.GetConnection: TFDConnection;
 begin
   Result := TFDConnection.Create(nil);
-  Result.ConnectionDefName := DB_CONNECTION_NAME;
-  Result.LoginPrompt := False;
-  Result.Connected := True;
+  try
+    Result.ConnectionDefName := DB_CONNECTION_NAME;
+    Result.LoginPrompt := False;
+    Result.Connected := True;
+  except
+    Result.Free;
+    raise;
+  end;
 end;
 
 class procedure TDBConnectionFactory.Initialize;
 var
   Params: TStringList;
 begin
+  TServerConfig.Initialize;
   if not FDManager.Active then FDManager.Active := True;
 
   if FDManager.ConnectionDefs.FindConnectionDef(DB_CONNECTION_NAME) = nil then begin
@@ -98,25 +97,12 @@ end;
 
 class function TDBConnectionFactory.ReadDatabaseSetting(const AEnvName, AName,
   ADefaultValue: string): string;
-var
-  LConfigFileName: string;
-  LIni: TIniFile;
 begin
   Result := Trim(GetEnvironmentVariable(AEnvName));
   if Result <> '' then
     Exit;
 
-  Result := ADefaultValue;
-  LConfigFileName := ConfigFileName;
-  if not FileExists(LConfigFileName) then
-    Exit;
-
-  LIni := TIniFile.Create(LConfigFileName);
-  try
-    Result := Trim(LIni.ReadString(DB_CONFIG_SECTION, AName, ADefaultValue));
-  finally
-    FreeAndNil(LIni);
-  end;
+  Result := TServerConfig.ReadString(DB_CONFIG_SECTION, AName, ADefaultValue);
 end;
 
 class function TDBConnectionFactory.RequireDatabaseSetting(const AEnvName,

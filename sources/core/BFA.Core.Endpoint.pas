@@ -21,18 +21,37 @@ type
       const ALogSource: string = 'Endpoint route error';
       AConnection: TFDConnection = nil; ARequireAuthentication: Boolean = False): string; static;
     class procedure WriteErrorLog(const ASource: string; AException: Exception); static;
+    class procedure WriteConsoleLog(const AMessage: string); static;
   end;
 
 implementation
 
 uses
   System.IOUtils,
+  System.SyncObjs,
   Data.DB,
   BFA.Core.Helper,
   BFA.Core.Response,
   BFA.Helper.Strings,
   BFA.Security.Token,
   DB.Helper.Query;
+
+var
+  GLogLock: TCriticalSection;
+
+class procedure THelperEndpoint.WriteConsoleLog(const AMessage: string);
+begin
+  GLogLock.Enter;
+  try
+    try
+      Writeln(AMessage);
+    except
+      // Diagnostics must not change the API response if the console fails.
+    end;
+  finally
+    GLogLock.Leave;
+  end;
+end;
 
 class function THelperEndpoint.ExecuteRoute(AData: TFDMemTable; ARequest: TWebRequest;
   AServiceClass: TClass; const APostOnlyActions: array of string;
@@ -146,8 +165,29 @@ begin
 
   LFileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'server-error.log');
   LMessage := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) + ' ' +
-    ASource + ': ' + AException.ClassName + ': ' + AException.Message + sLineBreak;
-  TFile.AppendAllText(LFileName, LMessage, TEncoding.UTF8);
+    ASource + ': ' + AException.ClassName + ': ' + AException.Message;
+  GLogLock.Enter;
+  try
+    try
+      Writeln(LMessage);
+    except
+      // Console output failure must not replace the original API exception.
+    end;
+
+    try
+      TFile.AppendAllText(LFileName, LMessage + sLineBreak, TEncoding.UTF8);
+    except
+      // File output failure must not replace the original API exception.
+    end;
+  finally
+    GLogLock.Leave;
+  end;
 end;
+
+initialization
+  GLogLock := TCriticalSection.Create;
+
+finalization
+  GLogLock.Free;
 
 end.

@@ -1,5 +1,6 @@
 object WM: TWM
   OnCreate = WebModuleCreate
+  AfterDispatch = WebModuleAfterDispatch
   Actions = <
     item
       Name = 'DefaultHandler'

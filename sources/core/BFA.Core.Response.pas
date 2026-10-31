@@ -56,6 +56,9 @@ const
   REQUEST_DETAIL_PROPERTY = 'request_detail';
   DATA_PROPERTY = 'data';
 
+var
+  GJSONNumberFormatSettings: TFormatSettings;
+
 function IsSuccessStatus(AStatusCode: Integer): Boolean;
 begin
   Result := (AStatusCode >= 200) and (AStatusCode <= 299);
@@ -235,15 +238,23 @@ begin
     AddJSONPairFromField(AObject, AField.FieldName, AField);
 end;
 
-function CreateDatasetObject(ADataset: TDataset; AFormatResponseFields: Boolean): TJSONObject;
+function GetDatasetFields(ADataset: TDataset): TArray<TField>;
 var
   I: Integer;
+begin
+  SetLength(Result, ADataset.FieldDefs.Count);
+  for I := 0 to ADataset.FieldDefs.Count - 1 do
+    Result[I] := ADataset.FieldByName(ADataset.FieldDefs[I].Name);
+end;
+
+function CreateDatasetObject(const AFields: TArray<TField>;
+  AFormatResponseFields: Boolean): TJSONObject;
+var
   LField: TField;
 begin
   Result := TJSONObject.Create;
   try
-    for I := 0 to ADataset.FieldDefs.Count - 1 do begin
-      LField := ADataset.FieldByName(ADataset.FieldDefs[I].Name);
+    for LField in AFields do begin
       if AFormatResponseFields then
         AddResponseField(Result, LField)
       else
@@ -257,15 +268,16 @@ end;
 
 function CreateDatasetArray(ADataset: TDataset; AFormatResponseFields: Boolean): TJSONArray;
 var
-  LRecordIndex: Integer;
+  LFields: TArray<TField>;
 begin
   Result := TJSONArray.Create;
   try
     if not Assigned(ADataset) or not ADataset.Active or ADataset.IsEmpty then exit;
 
     ADataset.First;
-    for LRecordIndex := 0 to ADataset.RecordCount - 1 do begin
-      Result.AddElement(CreateDatasetObject(ADataset, AFormatResponseFields));
+    LFields := GetDatasetFields(ADataset);
+    while not ADataset.Eof do begin
+      Result.AddElement(CreateDatasetObject(LFields, AFormatResponseFields));
       ADataset.Next;
     end;
   except
@@ -352,8 +364,10 @@ end;
 
 function CreateQueryArray(AQuery: TFDQuery; AEncodeString: Boolean): TJSONArray;
 var
+  I: Integer;
   LData: TJSONObject;
   LField: TField;
+  LFields: TArray<TField>;
   LValue: string;
 begin
   Result := TJSONArray.Create;
@@ -361,10 +375,13 @@ begin
     if not Assigned(AQuery) or not AQuery.Active or AQuery.IsEmpty then exit;
 
     AQuery.First;
+    SetLength(LFields, AQuery.FieldCount);
+    for I := 0 to AQuery.FieldCount - 1 do
+      LFields[I] := AQuery.Fields[I];
     while not AQuery.Eof do begin
       LData := TJSONObject.Create;
       try
-        for LField in AQuery.Fields do begin
+        for LField in LFields do begin
           if LField.IsNull then begin
             LData.AddPair(LField.FieldName, TJSONNull.Create);
             continue;
@@ -442,7 +459,7 @@ begin
   try
     if Assigned(ARequest) and ARequest.Active and not ARequest.IsEmpty then begin
       ARequest.First;
-      LRequestDetail := CreateDatasetObject(ARequest, False);
+      LRequestDetail := CreateDatasetObject(GetDatasetFields(ARequest), False);
       LResponse.AddPair(REQUEST_DETAIL_PROPERTY, LRequestDetail);
     end;
 
@@ -595,10 +612,13 @@ end;
 class function TValueValidator.IsNumber(AValue: string): Boolean;
 var
   LDummy: Single;
-  LFormatSettings: TFormatSettings;
 begin
-  LFormatSettings := TFormatSettings.Create('en-US');
-  Result := (Pos(',', AValue) = 0) and TryStrToFloat(AValue, LDummy, LFormatSettings);
+  Result := (Pos(',', AValue) = 0) and
+    TryStrToFloat(AValue, LDummy, GJSONNumberFormatSettings);
 end;
+
+initialization
+  // Initialize once before request threads start; never mutate this context.
+  GJSONNumberFormatSettings := TFormatSettings.Create('en-US');
 
 end.

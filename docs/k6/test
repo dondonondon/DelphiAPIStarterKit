@@ -1,0 +1,5 @@
+k6 run -e BASE_URL=http://192.168.0.110:9999 docs/k6/api-read-test-all.js
+
+k6 run -e BASE_URL=http://192.168.0.110:9999 -e FIXED_VUS=5 -e TEST_DURATION=60s -e RESPONSE_ENCODING=identity docs/k6/api-read-test-all.js
+
+k6 run -e BASE_URL=http://192.168.0.150:9999 -e FIXED_VUS=50 -e TEST_DURATION=60s -e RESPONSE_ENCODING=gzip docs/k6/api-read-test-all.js

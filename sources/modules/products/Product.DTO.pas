@@ -44,6 +44,9 @@ type
 
 implementation
 
+var
+  GProductNumberFormatSettings: TFormatSettings;
+
 class function TProductDTO.CreateProductResponse(const AProductID,
   AProductName, ADescription: string; const APrice: Currency; AStock: Integer;
   const ACategoryID, ACategoryName: string; AIsActive: Integer): TStringList;
@@ -65,11 +68,11 @@ begin
 end;
 
 class function TProductDTO.CurrencyToText(const AValue: Currency): string;
-var
-  LFormatSettings: TFormatSettings;
 begin
-  LFormatSettings := TFormatSettings.Create('en-US');
-  Result := FormatFloat('0.00', AValue, LFormatSettings);
+  Result := FormatFloat('0.00', AValue, GProductNumberFormatSettings);
 end;
+
+initialization
+  GProductNumberFormatSettings := TFormatSettings.Create('en-US');
 
 end.

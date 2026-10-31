@@ -4,6 +4,7 @@ interface
 
 uses
   System.Classes,
+  System.SysUtils,
   FireDAC.Comp.Client,
   Web.HTTPApp,
   Customer.Repository;
@@ -19,7 +20,7 @@ type
 
     function ExtractRouteCustomerID(out ACustomerID: string;
       out AMessage: string): Boolean;
-    function InternalServerError: string;
+    function InternalServerError(AException: Exception): string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
       ARequest: TWebRequest; const AParts: TArray<string>);
@@ -37,13 +38,73 @@ type
 implementation
 
 uses
-  System.SysUtils,
+  System.Diagnostics,
   Data.DB,
+  BFA.Core.Endpoint,
   BFA.Core.Response,
   BFA.Helper.Strings,
   BFA.Helper.Transaction,
   Customer.DTO,
   Customer.Validator;
+
+type
+  TCustomerFetchTiming = class
+  private
+    FFetchStartTicks: Int64;
+    FFetchTicks: Int64;
+    FFetchCount: Integer;
+  public
+    procedure BeforeFetch(Sender: TObject);
+    procedure AfterFetch(Sender: TObject);
+    procedure WriteTiming(AQueryOpenTicks, ASerializeTicks: Int64;
+      ADataset: TFDQuery; AStatusCode: Integer; AIsDetail: Boolean;
+      const AResponse: string);
+  end;
+
+var
+  GCustomerTimingEnabled: Boolean;
+  GCustomerTimingFormatSettings: TFormatSettings;
+
+procedure TCustomerFetchTiming.BeforeFetch(Sender: TObject);
+begin
+  FFetchStartTicks := TStopwatch.GetTimeStamp;
+end;
+
+procedure TCustomerFetchTiming.AfterFetch(Sender: TObject);
+begin
+  Inc(FFetchTicks, TStopwatch.GetTimeStamp - FFetchStartTicks);
+  Inc(FFetchCount);
+end;
+
+procedure TCustomerFetchTiming.WriteTiming(AQueryOpenTicks, ASerializeTicks: Int64;
+  ADataset: TFDQuery; AStatusCode: Integer; AIsDetail: Boolean;
+  const AResponse: string);
+var
+  LJSONTicks: Int64;
+  LRoute: string;
+begin
+  try
+    LJSONTicks := ASerializeTicks - FFetchTicks;
+    if LJSONTicks < 0 then
+      LJSONTicks := 0;
+    LRoute := '/api/v1/Customer';
+    if AIsDetail then
+      LRoute := LRoute + '/{customer_id}';
+
+    THelperEndpoint.WriteConsoleLog(Format(
+      'Customer timing: route=%s status=%d query_open_ms=%.3f ' +
+      'remaining_fetch_ms=%.3f json_ms=%.3f serialize_with_fetch_ms=%.3f ' +
+      'fetched_rows=%d response_utf8_bytes=%d remaining_fetch_count=%d',
+      [LRoute, AStatusCode, AQueryOpenTicks * 1000.0 / TStopwatch.Frequency,
+       FFetchTicks * 1000.0 / TStopwatch.Frequency,
+       LJSONTicks * 1000.0 / TStopwatch.Frequency,
+       ASerializeTicks * 1000.0 / TStopwatch.Frequency, ADataset.RecordCount,
+       TEncoding.UTF8.GetByteCount(AResponse), FFetchCount],
+      GCustomerTimingFormatSettings));
+  except
+    // Diagnostics must not change the API response if console output fails.
+  end;
+end;
 
 constructor TCustomerService.Create(AConnection: TFDConnection;
   AData: TFDMemTable; ARequest: TWebRequest; const AParts: TArray<string>);
@@ -80,7 +141,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -88,7 +149,7 @@ begin
     Result := THelperResponse.CreateResponse(FStatusCode, 'Customer deleted', FData);
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
@@ -124,22 +185,58 @@ function TCustomerService.Get: string;
 var
   LCustomerID: string;
   LDataset: TFDQuery;
+  LTiming: TCustomerFetchTiming;
+  LQueryOpenTicks: Int64;
+  LSerializeStartTicks: Int64;
+  LSerializeTicks: Int64;
+  LResponseReady: Boolean;
 begin
   LCustomerID := '';
   if Length(FParts) >= 4 then
     LCustomerID := Trim(FParts[3]);
 
-  LDataset := FRepository.GetCustomers(LCustomerID);
-  try
-    if LDataset.IsEmpty then begin
-      FStatusCode := 404;
-      Exit(THelperResponse.CreateResponse(FStatusCode, 'Customer not found', FData));
-    end;
+  LTiming := nil;
+  LQueryOpenTicks := 0;
+  LSerializeStartTicks := 0;
+  LResponseReady := False;
+  if GCustomerTimingEnabled then begin
+    LTiming := TCustomerFetchTiming.Create;
+    LQueryOpenTicks := TStopwatch.GetTimeStamp;
+  end;
 
-    FStatusCode := 200;
-    Result := THelperResponse.CreateResponse(FStatusCode, 'OK', LDataset, FData);
+  try
+    LDataset := FRepository.GetCustomers(LCustomerID);
+    try
+      if Assigned(LTiming) then begin
+        LQueryOpenTicks := TStopwatch.GetTimeStamp - LQueryOpenTicks;
+        LDataset.Command.BeforeFetch := LTiming.BeforeFetch;
+        LDataset.Command.AfterFetch := LTiming.AfterFetch;
+        LSerializeStartTicks := TStopwatch.GetTimeStamp;
+      end;
+
+      if LDataset.IsEmpty then begin
+        FStatusCode := 404;
+        Result := THelperResponse.CreateResponse(FStatusCode, 'Customer not found', FData);
+        LResponseReady := True;
+        Exit;
+      end;
+
+      FStatusCode := 200;
+      Result := THelperResponse.CreateResponse(FStatusCode, 'OK', LDataset, FData);
+      LResponseReady := True;
+    finally
+      if Assigned(LTiming) then begin
+        LSerializeTicks := TStopwatch.GetTimeStamp - LSerializeStartTicks;
+        LDataset.Command.BeforeFetch := nil;
+        LDataset.Command.AfterFetch := nil;
+        if LResponseReady then
+          LTiming.WriteTiming(LQueryOpenTicks, LSerializeTicks, LDataset,
+            FStatusCode, LCustomerID <> '', Result);
+      end;
+      FreeAndNil(LDataset);
+    end;
   finally
-    FreeAndNil(LDataset);
+    FreeAndNil(LTiming);
   end;
 end;
 
@@ -165,7 +262,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -187,12 +284,13 @@ begin
     Result := THelperResponse.CreateResponse(FStatusCode, 'Customer created', LResponseData);
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
-function TCustomerService.InternalServerError: string;
+function TCustomerService.InternalServerError(AException: Exception): string;
 begin
+  THelperEndpoint.WriteErrorLog('Customer service error', AException);
   FStatusCode := 500;
   Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
 end;
@@ -250,7 +348,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -295,8 +393,12 @@ begin
     Result := THelperResponse.CreateResponse(FStatusCode, 'Customer updated', LResponseData);
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
+
+initialization
+  GCustomerTimingEnabled := Trim(GetEnvironmentVariable('DELPHI_API_CUSTOMER_TIMING')) = '1';
+  GCustomerTimingFormatSettings := TFormatSettings.Invariant;
 
 end.

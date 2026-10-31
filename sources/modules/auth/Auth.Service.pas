@@ -35,9 +35,9 @@ type
 implementation
 
 uses
-  System.IOUtils,
   Data.DB,
   BFA.Core.Response,
+  BFA.Core.Endpoint,
   BFA.Helper.Strings,
   BFA.Helper.Transaction,
   Auth.DTO,
@@ -46,17 +46,8 @@ uses
 { TAuthService }
 
 procedure WriteAuthErrorLog(const ASource: string; AException: Exception);
-var
-  LFileName: string;
-  LMessage: string;
 begin
-  if not Assigned(AException) then
-    Exit;
-
-  LFileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'server-error.log');
-  LMessage := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) + ' ' +
-    ASource + ': ' + AException.ClassName + ': ' + AException.Message + sLineBreak;
-  TFile.AppendAllText(LFileName, LMessage, TEncoding.UTF8);
+  THelperEndpoint.WriteErrorLog(ASource, AException);
 end;
 
 constructor TAuthService.Create(AConnection: TFDConnection; AData: TFDMemTable;
