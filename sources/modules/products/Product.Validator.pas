@@ -32,6 +32,9 @@ uses
   System.SysUtils,
   BFA.Helper.Validator;
 
+var
+  GProductNumberFormatSettings: TFormatSettings;
+
 class function TProductValidator.ExtractCategoryID(AData: TFDMemTable;
   const ARequired: Boolean; out ACategoryID: string; out AHasCategoryID: Boolean;
   out AMessage: string): Boolean;
@@ -85,7 +88,6 @@ class function TProductValidator.ParseCurrencyField(AData: TFDMemTable;
   const AFieldName, AInvalidMessage: string; out AValue: Currency;
   out AMessage: string): Boolean;
 var
-  LFormatSettings: TFormatSettings;
   LText: string;
 begin
   Result := False;
@@ -95,8 +97,7 @@ begin
     Exit(True);
 
   LText := Trim(AData.FieldByName(AFieldName).AsString);
-  LFormatSettings := TFormatSettings.Create('en-US');
-  if not TryStrToCurr(LText, AValue, LFormatSettings) then begin
+  if not TryStrToCurr(LText, AValue, GProductNumberFormatSettings) then begin
     if not TryStrToCurr(LText, AValue) then begin
       AMessage := AInvalidMessage;
       Exit;
@@ -273,5 +274,8 @@ begin
 
   Result := True;
 end;
+
+initialization
+  GProductNumberFormatSettings := TFormatSettings.Create('en-US');
 
 end.

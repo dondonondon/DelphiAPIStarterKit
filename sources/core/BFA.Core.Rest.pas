@@ -65,7 +65,6 @@ implementation
 uses
   System.JSON,
   System.DateUtils,
-  System.IOUtils,
   System.StrUtils,
   Data.DB,
   DBClient,
@@ -89,6 +88,7 @@ uses
   Web.HTTPProd,
   BFA.Helper.Dataset,
   BFA.Core.Response,
+  BFA.Core.Endpoint,
   RestAPI.User,
   RestAPI.Auth,
   RestAPI.Product,
@@ -96,14 +96,8 @@ uses
   RestAPI.Customer;
 
 procedure WriteCoreErrorLog(const ASource: string; AException: Exception);
-var
-  LFileName: string;
-  LMessage: string;
 begin
-  LFileName := TPath.Combine(ExtractFilePath(ParamStr(0)), 'server-error.log');
-  LMessage := FormatDateTime('yyyy-mm-dd hh:nn:ss.zzz', Now) +
-    ' ' + ASource + ': ' + AException.ClassName + ': ' + AException.Message + sLineBreak;
-  TFile.AppendAllText(LFileName, LMessage, TEncoding.UTF8);
+  THelperEndpoint.WriteErrorLog(ASource, AException);
 end;
 
 constructor TClassHelper.Create;

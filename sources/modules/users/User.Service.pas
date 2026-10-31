@@ -1,9 +1,10 @@
-﻿unit User.Service;
+unit User.Service;
 
 interface
 
 uses
   System.Classes,
+  System.SysUtils,
   FireDAC.Comp.Client,
   Web.HTTPApp,
   User.Repository;
@@ -20,7 +21,7 @@ type
 
     function GetAuthenticatedUserID(out AUserID: string): Boolean;
     function GenerateTemporaryPassword: string;
-    function InternalServerError: string;
+    function InternalServerError(AException: Exception): string;
   public
     constructor Create(AConnection: TFDConnection; AData: TFDMemTable;
       ARequest: TWebRequest; const AParts: TArray<string>);
@@ -40,8 +41,8 @@ type
 implementation
 
 uses
-  System.SysUtils,
   Data.DB,
+  BFA.Core.Endpoint,
   BFA.Core.Response,
   BFA.Helper.Strings,
   BFA.Helper.Transaction,
@@ -120,7 +121,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -128,7 +129,7 @@ begin
     Result := THelperResponse.CreateResponse(FStatusCode, 'Password updated', FData);
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
@@ -156,7 +157,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -164,7 +165,7 @@ begin
     Result := THelperResponse.CreateResponse(FStatusCode, 'User deleted', FData);
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
@@ -257,7 +258,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -277,12 +278,13 @@ begin
     end;
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
-function TUserService.InternalServerError: string;
+function TUserService.InternalServerError(AException: Exception): string;
 begin
+  THelperEndpoint.WriteErrorLog('User service error', AException);
   FStatusCode := 500;
   Result := THelperResponse.CreateResponse(FStatusCode, 'Internal server error.', FData);
 end;
@@ -329,7 +331,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -347,7 +349,7 @@ begin
     end;
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 
@@ -401,7 +403,7 @@ begin
     except
       on E: Exception do begin
         THelperTransaction.Rollback(FConnection);
-        Exit(InternalServerError);
+        Exit(InternalServerError(E));
       end;
     end;
 
@@ -430,7 +432,7 @@ begin
     end;
   except
     on E: Exception do
-      Result := InternalServerError;
+      Result := InternalServerError(E);
   end;
 end;
 

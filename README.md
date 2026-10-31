@@ -107,6 +107,23 @@ POOL_ExpireTimeout=300000
 
 Use `config.example.ini` as the template. Do not commit your real `config.ini`.
 
+Database and security settings share one configuration resolver. Set `DELPHI_API_CONFIG` to an absolute existing file path, or place `config.ini` beside the executable. Without an explicit path, the startup working directory is a compatibility fallback when the adjacent file does not exist. An invalid explicit path stops startup, including when environment overrides are present. Individual setting environment variables take precedence over file values.
+
+The HMAC secret is validated and cached before the listener starts. Restart the process after changing configuration or the secret; token/password hashing algorithms remain unchanged. Without an explicit configuration path or environment secret, a nonblank legacy Linux secret from `/var/lib/<executable-name>/config.ini` keeps priority over the default main file, preserving existing token/password keys. Use `DELPHI_API_CONFIG` or the secret environment variable to deliberately select the new source. New deployments should use the shared configuration file or environment variables.
+
+### HTTP gzip Compression
+
+HTTP JSON compression defaults to the following startup settings in the same `config.ini`:
+
+```ini
+[HTTP]
+GzipEnabled=True
+GzipMinimumBytes=1024
+GzipLevel=1
+```
+
+Gzip is used only when accepted by the client and the UTF-8 body reaches the minimum size (1024 bytes = 1 KiB). Levels 1-9 trade CPU time for compression ratio; level 1 favors speed. Smaller responses and output that would grow remain uncompressed. Settings are read once and require a restart. See [gzip benchmark instructions](docs/k6/benchmark.md#perbandingan-gzip-dan-identity).
+
 ### Import Schema via MySQL CLI
 
 Create the database:
@@ -202,24 +219,41 @@ Alternatively, place the DLL directory in the Windows `PATH`.
 If you run from the IDE and the current directory is different, make sure `VendorHome` points to the directory containing the DLL. The current Windows startup code sets:
 
 ```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := GetCurrentDir;
+DM.FDPhysMySQLDriverLink.VendorHome := ExtractFilePath(ExpandFileName(ParamStr(0)));
 ```
 
-This means the application looks for the native client library from the current directory. If the DLL is stored elsewhere, adjust `VendorHome` in the startup code.
+Windows defaults to the executable directory. Override `[Database] VendorHome` / `VendorLib` or `DELPHI_API_DB_VENDOR_HOME` / `DELPHI_API_DB_VENDOR_LIB` for a different native client location. Use absolute deployment paths; environment values take precedence.
 
 For an open-source repository, the recommended approach is not to commit `libmysql.dll` or binary ZIP files. Document the dependency and let users install the client library from the official vendor package.
+
+### Windows SSL Errors with MySQL 8
+
+If FireDAC reports `SSL connection error: unknown error number`, check the version of the client DLL actually loaded. Older clients built with yaSSL only support TLS 1.0/1.1 and can fail against servers that only accept TLS 1.2/1.3. `require_secure_transport=OFF` does not prevent clients from attempting TLS connections.
+
+Use an official x64 client from the [MySQL 8.4 Windows ZIP package](https://dev.mysql.com/downloads/mysql/8.4.html?os=3), including its matching OpenSSL dependencies. For Win64 deployment with `bin` as the current directory and the `VendorHome` setting above, the following layout has been tested:
+
+```text
+bin/DelphiAPIStarterKit.exe
+bin/config.ini
+bin/lib/libmysql.dll
+bin/libcrypto-3-x64.dll
+bin/libssl-3-x64.dll
+```
+
+Stop the application before replacing libraries and back up the old DLL. MySQL 8.4 x64 cannot be used with Win32 builds. Keep the server's TLS protocol settings when resolving old client compatibility issues.
 
 ### Linux Client Library Notes
 
 For Linux64 deployment, install the MySQL/MariaDB client library on the target server using the server distribution package manager or the official vendor package.
 
-The current Linux startup code sets:
+Example native library override in the selected `config.ini`:
 
-```pascal
-DM.FDPhysMySQLDriverLink.VendorHome := '/www/server/mysql/';
+```ini
+[Database]
+VendorLib=/usr/lib/x86_64-linux-gnu/libmysqlclient.so.21
 ```
 
-If your Linux server stores the client library in a different location, adjust `VendorHome` in `DelphiAPIStarterKit.dpr` or adapt the startup code to read this path from deployment configuration.
+Linux preserves `/usr/lib/x86_64-linux-gnu/libmysqlclient.so.21` as the default when that file exists; otherwise FireDAC uses its normal library lookup. Configure `[Database] VendorHome` / `VendorLib` or the corresponding environment variables for other distributions and client layouts. The startup message confirms the listener is active; it does not prove database connectivity.
 
 ## Build
 
@@ -281,6 +315,24 @@ Default local base URL:
 ```text
 http://localhost:9381
 ```
+
+## k6 Read Benchmark
+
+On 31 October 2026, the Win64 Release build was tested with k6 and the API on the same Windows host; MySQL 8.4.11 ran on a separate host over the network. The test used 30 fixed virtual users for 60 seconds, plus graceful completion, against eight GET list/detail endpoints for User, Product, Category, and Customer. The preflight returned 1 user, 8 products, 5 categories, and 100 customers.
+
+| Metric | Result |
+|---|---:|
+| Requests, including preflight | 13,992 |
+| Combined throughput | 229.82 requests/s |
+| Failed requests | 0% |
+| Response checks passed | 118,932 / 118,932 |
+| HTTP average / p95 / p99 | 53.13 / 165.77 / 276.77 ms |
+| Maximum HTTP duration | 654.87 ms |
+| Completed / interrupted iterations | 1,748 / 0 |
+
+All thresholds passed, including p95 below 500 ms for every endpoint. Customer list was the slowest, with 135.05 ms average and 300.27 ms p95. The load phase sent 1,748 requests to each endpoint. Global metrics include preflight; throughput combines all endpoints and reflects the script's pacing. This short read-only test does not establish maximum capacity or long-term stability. Image, authentication workflows, and write operations were excluded; row counts were observed from responses and not independently verified against the database.
+
+See the [benchmark guide](docs/k6/benchmark.md) for the workload, configuration, and interpretation.
 
 ## API Quickstart
 
