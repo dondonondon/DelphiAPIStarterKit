@@ -74,8 +74,6 @@ DELPHI_API_CUSTOMER_TIMING=1 ./DelphiAPIStarterKit 2>&1 \
   | tee "$HOME/DelphiAPIStarterKit-timing.log"
 ```
 
-Lokasi file mengikuti akun yang menjalankan perintah. Jika dijalankan sebagai root, `$HOME` mengarah ke `/root`. Timing tidak otomatis ditulis ke `server-error.log`. Petunjuk lengkap tersedia di [docs/k6/benchmark.md](docs/k6/benchmark.md).
-
 ## 3. Exception logging pada console dan file
 
 Sebelumnya, sebagian jalur exception hanya menghasilkan respons generik HTTP 500 atau menulis ke file. Perubahan berikut membuat detailnya tersedia bagi operator server:
@@ -94,101 +92,6 @@ Sebelumnya, sebagian jalur exception hanya menghasilkan respons generik HTTP 500
 Kegagalan output console/file ditangani secara terpisah agar tidak menggantikan respons error asli. Respons HTTP tetap menggunakan pesan `Internal server error.` dan envelope yang sudah ada. Detail internal berada pada log server; logger tidak menambahkan request body atau header autentikasi.
 
 Melalui logging ini, kegagalan konfigurasi `DELPHI_API_HMAC_SECRET` dapat diidentifikasi. Algoritma HMAC dan mekanisme pencarian secret tidak diubah pada pekerjaan ini. Nilai secret/password/token tidak dicatat dalam dokumen ini.
-
-## 4. Pengembangan skrip k6
-
-File: [docs/k6/api-read-test-all.js](docs/k6/api-read-test-all.js).
-
-- Melengkapi delapan endpoint GET daftar/detail User, Product, Category, dan Customer.
-- Menghapus token dan ID fixture bawaan; token berasal dari environment `API_TOKEN`, sedangkan ID dapat ditemukan dari daftar atau diisi melalui environment.
-- Memakai `x-api-token`, sesuai dukungan server saat ini. Pengujian langsung sebelumnya menunjukkan header Bearer ditolak Indy dengan `Unsupported authorization scheme` sebelum validasi token API.
-- Menambahkan preflight daftar/detail, validasi envelope JSON, public ID, kecocokan ID detail, dan jumlah baris daftar pada console.
-- Menambahkan `checks: rate==1` agar kegagalan validasi turut menggagalkan pengujian.
-- Menambahkan tag `phase` dan `endpoint`, threshold per endpoint, minimal satu request per endpoint pada fase load, serta statistik p99.
-- Menambahkan mode `SMOKE=1`, filter `RESOURCE`, beban tetap `FIXED_VUS`, durasi `TEST_DURATION`, dan pengujian gambar opsional `IMAGE_FILENAME`.
-- Menormalkan URL, menambahkan timeout 30 detik dan menonaktifkan redirect agar respons endpoint asli diperiksa.
-- Default URL menjadi `http://127.0.0.1:9999`, mengikuti port aplikasi. Profil bawaan tetap lima tahap 15 detik menuju `5 -> 10 -> 15 -> 25 -> 0` VU.
-
-Throughput `http_reqs` global adalah gabungan semua endpoint, bukan throughput Customer saja atau kapasitas maksimum server. Threshold per endpoint memakai sampel `phase:load`, sedangkan statistik global mencakup preflight. Semua request dapat berhasil secara HTTP, tetapi tes tetap gagal jika p95 salah satu endpoint melewati 500 ms.
-
-Contoh benchmark yang dipakai pada Linux VM:
-
-```powershell
-k6 run -e BASE_URL=http://192.168.0.110:9999 docs/k6/api-read-test-all.js
-```
-
-Contoh diagnosis Customer dengan beban tetap:
-
-```powershell
-k6 run -e BASE_URL=http://192.168.0.110:9999 -e RESOURCE=Customer -e FIXED_VUS=5 -e TEST_DURATION=60s docs/k6/api-read-test-all.js
-```
-
-## 5. Hasil benchmark Linux VM terakhir
-
-Sumber: snapshot [docs/k6/result.txt](docs/k6/result.txt) dan [docs/k6/DelphiAPIStarterKit-timing.log](docs/k6/DelphiAPIStarterKit-timing.log) yang disediakan pemilik. Angka berikut dipertahankan sebagai snapshot pencatatan; file hasil dapat diperbarui pada pengujian berikutnya.
-
-| Metrik k6 | Hasil |
-|---|---:|
-| Target | `192.168.0.110:9999` |
-| Durasi aktual | 75,7 detik |
-| VU maksimum tercapai | 25 |
-| Total request | 7.272 |
-| Throughput gabungan rata-rata | 96,07 request/detik |
-| Request gagal | 0% |
-| Checks berhasil | 61.812 dari 61.812 (100%) |
-| Rata-rata HTTP keseluruhan | 33,61 ms |
-| p95 HTTP keseluruhan | 185,56 ms |
-| p99 HTTP keseluruhan | 388,26 ms |
-| Rata-rata HTTP Customer list | 197,83 ms |
-| p95 HTTP Customer list | 415,05 ms |
-| p99 HTTP Customer list | 530,17 ms |
-| Respons maksimum | 750,09 ms |
-| Request Customer list selama load | 908, sekitar 12 request/detik |
-| Iterasi selesai / terputus | 908 / 0 |
-| Status threshold global dan per endpoint | LULUS |
-
-Customer list berisi 100 baris. Dari 907 baris timing Customer list yang utuh:
-
-| Bagian service | Rata-rata | p95 |
-|---|---:|---:|
-| Query/open, termasuk fetch awal | 32,99 ms | 46,21 ms |
-| Fetch lanjutan | 0 ms | 0 ms |
-| Pembentukan JSON | 19,41 ms | 28,04 ms |
-| Gabungan query dan JSON | 52,40 ms | 71,27 ms |
-
-Ukuran JSON Customer list adalah 492.335 byte, sekitar 481 KiB. Tidak ada fetch lanjutan yang tercatat untuk 100 baris pada run ini; biaya fetch awal sudah masuk query/open.
-
-Selisih rata-rata HTTP Customer list dengan waktu service sekitar 145 ms. Ini perkiraan dari dua kumpulan sampel yang tidak dipasangkan per request; belum dapat diatribusikan ke jaringan saja. Pembukaan koneksi, autentikasi, antrean pemrosesan, encoding/pengiriman respons, dan jaringan belum diukur terpisah.
-
-Hasil menunjukkan performa baca yang memenuhi target pada skenario ini. Cache locale adalah perubahan yang langsung mengurangi pekerjaan serializer, tetapi besarnya kontribusi tunggalnya memerlukan perbandingan dengan data, binary, instrumentasi, dan kondisi beban yang setara. Hasil ini belum membuktikan kapasitas maksimum atau ketahanan jangka panjang pada 25 VU tetap.
-
-## 6. Validasi yang telah dilakukan
-
-- Build Win64 Release dan Linux64 Release lulus pada salinan proyek terisolasi.
-- Respons sebelum/sesudah optimasi dibandingkan pada fixture; hasil identik setelah mengabaikan timestamp `servertime` yang memang berubah.
-- Fixture mencakup null, Unicode, tipe angka, string dengan nol awal, tanggal beserta field Unix, dan JSON bertingkat pada dataset 2.500 baris.
-- Sebanyak 16.000 pemeriksaan parsing concurrent lulus.
-- Customer list/detail/404 diuji memakai SQLite terisolasi; timing aktif/nonaktif mempertahankan respons yang sama dan event fetch lanjutan terdeteksi.
-- Tujuh skenario k6 fixture lulus: delapan endpoint, Customer smoke, Customer beban tetap, gambar opsional, penolakan envelope rusak, resource tidak valid, dan jumlah VU tidak valid. Kasus negatif lulus ketika skrip mengembalikan kegagalan yang diharapkan.
-- Penanganan exception service dan kegagalan output file log diuji secara lokal dengan respons 500 tetap sesuai envelope.
-- Benchmark Linux VM di atas dijalankan pemilik dan lognya dianalisis; ini merupakan bukti runtime untuk run tersebut. Pemeriksaan SSH dilakukan tanpa mengubah konfigurasi atau me-restart server oleh asisten.
-
-## 7. Batasan dan pekerjaan tertunda
-
-1. **Kondisi snapshot sebelum perbaikan lanjutan:** log timing menunjukkan beberapa baris tercampur/terpotong pada request paralel. Analisis hanya menggunakan 1.811 baris timing yang utuh: 907 list dan 904 detail. Sinkronisasi logger telah ditambahkan pada bagian 9; snapshot log dan statistik HTTP lama tetap dipertahankan.
-2. **Pagination ditunda sesuai arahan pemilik.** Query, fetch options, serta kontrak jumlah hasil tidak diubah pada optimasi ini.
-3. **Bug `RecordCount` pada snapshot lama:** pada fixture 2.300 Customer dengan rowset 1.000, serializer hanya mengembalikan 1.000 baris, sementara dataset sudah memuat 2.000 baris. Bagian 9 memperbaiki iterasi sampai `Eof`; respons besar sekarang lengkap dan dapat memiliki ukuran/waktu lebih tinggi daripada respons lama yang terpotong.
-4. **Sebagian request Customer list masih lebih dari 500 ms.** p95 lulus, sedangkan p99 530,17 ms dan maksimum 750,09 ms. Threshold p95 tidak mensyaratkan setiap request di bawah 500 ms.
-5. **Pengukuran belum mencakup seluruh jalur HTTP.** Pemisahan waktu koneksi/auth, antrean, encoding/send, dan transfer jaringan belum tersedia. Beban tetap 25 VU dan soak test jangka panjang belum terbukti oleh run lima tahap ini.
-
-## 8. Dokumen pendamping dan kepemilikan perubahan
-
-- [docs/k6/benchmark.md](docs/k6/benchmark.md): cara menjalankan benchmark, environment timing, serta interpretasi metrik.
-- [docs/information/information.md](docs/information/information.md): peta logger, serializer, dan alur timing untuk navigasi source.
-- [docs/k6/compare.md](docs/k6/compare.md): snapshot perbandingan mesin yang sebelumnya dicatat atas permintaan pemilik; tidak diperbarui oleh penulisan dokumen ini.
-- `DelphiAPIStarterKit.dpr`: pengaturan format global, port, dan konfigurasi library Linux milik pemilik dipertahankan pada tahap optimasi ini; tidak diklaim sebagai perubahan asisten.
-
-Penulisan `IMPROVEMENT.md` ini hanya mendokumentasikan implementasi dan bukti yang sudah ada. Tidak sekaligus memperbaiki sinkronisasi logger, mengubah API/database, menambahkan pagination, atau menjalankan benchmark/deployment baru.
 
 ## 9. Perbaikan lanjutan setelah review Windows/Linux
 
@@ -251,24 +154,6 @@ JSON kini mendeklarasikan `charset=utf-8` pada `Content-Type`, bukan `Content-En
 
 Kompresi menghormati `gzip;q=0`, bobot valid dan wildcard. Identity digunakan bila client tidak menerima gzip, body kurang dari minimum, atau kompresi memperbesar payload. JSON berupa stream/existing coding, gambar, HEAD/CONNECT, status tanpa body/partial, range, `no-transform`, serta validator/digest lama dilewati. Tidak ada kompresi request/upload, cache respons, perubahan SQL, atau pagination.
 
-`RESPONSE_ENCODING=auto|gzip|identity` pada k6 memudahkan A/B tanpa mengganti konfigurasi server. Pemeriksaan optional expected-count juga menangani `null` setelah serialisasi hasil setup k6. Petunjuk ada di `docs/k6/benchmark.md`; timing `SendToCoreAPI.total_ms` tidak mencakup gzip di `AfterDispatch`.
+## HTTP request admission and Customer responses
 
-Validasi:
-
-- Build aplikasi lengkap Win64 Release dan cross-compile Linux64 Release: lulus pada salinan terisolasi.
-- 138 pemeriksaan HTTP menggunakan bridge Indy/WebBroker lokal dan decoder gzip Node.js: lulus. Mencakup Unicode, byte identik setelah dekompresi, 2.305 record, batas 1023/1024 byte, level 1-9, 32 request paralel, Vary, negosiasi q/wildcard, status/body/stream skip, ukuran membesar, konfigurasi invalid, dan cache hingga restart.
-- Fixture repetitif 247.872 byte menghasilkan gzip level 1 sebesar 7.019 byte. Ini ukuran fixture, bukan benchmark throughput/payload Customer produksi.
-- 15 skenario fixture k6 lulus, termasuk gzip/identity dan parsing JSON gzip; 13 skenario konfigurasi dengan 16.000 hash concurrent serta 124.348 pemeriksaan core sebelumnya juga lulus ulang.
-- Tidak menjalankan runtime Linux atau benchmark server nyata, deployment, maupun restart service. Rasio kompresi, CPU, dan p95/RPS Linux memerlukan A/B pada data/beban yang sama.
-
-## 11. Batas request WebBroker — Dell 5070 (11 November 2026)
-
-Diagnosis 50 VU pada database lokal mereproduksi HTTP 500 `Maximum number of concurrent connections exceeded`: 9/9 kegagalan diagnosis berasal dari batas aktif bawaan RTL 32. RunServer kini menerapkan `[HTTP] MaxConcurrentRequests` (default 64, integer positif) sebelum listener aktif. Database, pool dan threshold tidak diubah. Skrip k6 menambahkan counter status dan klasifikasi kegagalan tanpa isi respons/token.
-
-Build Linux64/Win64, penolakan konfigurasi invalid pada Linux, dan fixture k6 existing lulus. Benchmark 50 VU/60s setelah deploy: 32.120 request, 527,31 req/s, 0 gagal, checks 100%, p95 52,04 ms; seluruh threshold lulus. Maksimum 1,33 detik masih merupakan outlier. Bukti dan batas klaim: [catatan perbaikan](docs/k6/dell5070-20261111/concurrency-fix.md).
-
-## 12. Customer list pada 200 VU — link LAN 100 Mbps dan gzip
-
-Diagnosis menemukan link eno1 server bernegosiasi 100 Mbps (NIC mendukung gigabit, partner mengiklankan 10/100), terpisah dari paket internet rumah. Customer list menghasilkan 492.335 byte identity atau sekitar 63,1 KB pada gzip 1. Gzip level 4 pada deployment mengurangi respons menjadi sekitar 40,3 KB. Perbaikan tuning ini mempertahankan payload/query/auth dan threshold, dengan timing kompresi opsional default-off di App.WebModule.
-
-Benchmark akhir 200 VU/60s dengan limits/pool 200/200 dan timing OFF lulus: 76.904 request, 1.251,07 req/s, tanpa error, Customer list p95 172,25 ms dibanding 508,78 ms sebelumnya. Maksimum masih sekitar 3,24 detik. Build Linux64/Win64, fixture gzip 138 checks dan payload equality native MySQL lulus. Detail bukti/batas: [Customer 200 VU fix](docs/k6/dell5070-20261111/customer200-bottleneck-fix.md).
+The standalone HTTP bridge now bounds active requests using MaxConcurrentRequests, with an equally sized waiting queue and a five-second wait timeout. Queue overflow/timeout returns HTTP 503 and Retry-After=1. Customer lists return at most 50 rows. Dataset responses use a JSON writer; partial Customer updates preserve provider Boolean compatibility. The optional MySQL 8 index migration matches the list filter and order. Runtime configuration and benchmark artifacts remain local.

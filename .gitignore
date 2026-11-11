@@ -140,3 +140,7 @@ config.*.local.ini
 /docs/k6/*-result*.txt
 /docs/k6/*-summary.json
 /docs/testing/
+
+# Benchmark scripts and fixtures remain local
+/docs/k6/
+/sources/tests/integration/k6-*.mjs

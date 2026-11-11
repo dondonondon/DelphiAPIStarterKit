@@ -1073,6 +1073,7 @@
                 {
                     "name": "Get All Customers",
                     "request": {
+                        "description": "Returns at most 50 non-deleted customers, ordered by created_at DESC, customer_name ASC. Requires an API token.",
                         "method": "GET",
                         "header": [
                             {
