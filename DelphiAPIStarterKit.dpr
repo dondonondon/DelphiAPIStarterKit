@@ -196,6 +196,7 @@ var
   LServer: TIdHTTPWebBrokerBridge;
   LVendorLib: string;
   LVendorHome: string;
+  LMaxConcurrentRequests: Integer;
 //  LServer : TsgcWSHTTPWebBrokerBridgeServer;
 begin
 
@@ -210,6 +211,11 @@ begin
   System.SysUtils.FormatSettings := FormatBr;
 
   TServerConfig.Initialize;
+  if not TryStrToInt(TServerConfig.ReadString('HTTP', 'MaxConcurrentRequests', '64'),
+    LMaxConcurrentRequests) or (LMaxConcurrentRequests < 1) then
+    raise Exception.Create('HTTP MaxConcurrentRequests must be a positive integer.');
+  if WebRequestHandler <> nil then
+    WebRequestHandler.MaxConnections := LMaxConcurrentRequests;
   TGlobalFunction.InitializeSecurity;
 
   LServer := TIdHTTPWebBrokerBridge.Create(nil);
@@ -245,6 +251,7 @@ begin
     LServer.Active := True;
 
     Writeln('Server started on port ', APort);
+    Writeln('WebBroker concurrent request limit: ', LMaxConcurrentRequests);
 
     while True do
       Sleep(1000);

@@ -256,13 +256,30 @@ end;
 
 procedure TWM.WebModuleAfterDispatch(Sender: TObject; Request: TWebRequest;
   Response: TWebResponse; var Handled: Boolean);
+var
+  LStartTicks: Int64;
+  LRoute: string;
 begin
   if not Handled then Exit;
+  LStartTicks := 0;
+  if GRequestTimingEnabled then
+    LStartTicks := RequestTimingStamp;
   try
     THTTPCompression.Apply(Request, Response);
   except
     on E: Exception do
       THelperEndpoint.WriteErrorLog('HTTP compression error', E);
+  end;
+  if GRequestTimingEnabled then begin
+    try
+      LRoute := RequestTimingRoute(Request.PathInfo.Trim(['/']).Split(['/']));
+      THelperEndpoint.WriteConsoleLog(Format(
+        'HTTP compression timing: route=%s status=%d compression_ms=%.3f content_encoding=%s content_bytes=%d',
+        [LRoute, Response.StatusCode,
+         RequestTimingElapsed(LStartTicks) * 1000.0 / TStopwatch.Frequency,
+         Response.ContentEncoding, Response.ContentLength], GRequestTimingFormatSettings));
+    except
+    end;
   end;
 end;
 

@@ -1,5 +1,10 @@
 ﻿import http from 'k6/http';
 import { check, group, sleep } from 'k6';
+import { Counter } from 'k6/metrics';
+
+// Low-cardinality diagnostics only: never capture tokens, IDs or response bodies.
+const responseStatuses = new Counter('api_response_status');
+const responseFailures = new Counter('api_response_failure');
 
 // Read-only coverage: GET list/detail for User, Product, Category, Customer.
 // Source: BFA.Core.Rest.RegisterClassAPI, each module's Service.Get and Repository.Get*.
@@ -182,6 +187,13 @@ function validateResponse(res, endpoint) {
 
 function readEndpoint(endpoint, phase) {
   const res = http.get(`${BASE_URL}${endpoint.url}`, requestParams(endpoint, phase));
+  responseStatuses.add(1, { phase, endpoint: endpoint.key, status: String(res.status) });
+  if (res.status !== 200) {
+    const brokerLimit = /maximum number of concurrent connections exceeded|too many (?:active |concurrent )?(?:connections|requests)/i.test(String(res.body || ''));
+    const reason = brokerLimit ? 'webbroker_connection_limit' : (res.status === 0 ? 'transport' : 'other_http');
+    responseFailures.add(1, { phase, endpoint: endpoint.key, status: String(res.status), reason });
+    if (__ENV.DIAGNOSTICS === '1') console.warn(`API failure: endpoint=${endpoint.key} status=${res.status} reason=${reason}`);
+  }
   const body = validateResponse(res, endpoint);
   if (phase === 'setup' && !body) {
     // Do not log response bodies, which can contain user/customer data.

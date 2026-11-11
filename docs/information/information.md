@@ -157,3 +157,15 @@ Fixture Delphi dibangun ke direktori TEMP baru. Serializer memakai SQLite in-mem
 Fixture memeriksa kelengkapan >1.000 record pada fetch bertahap, format Product, cache HMAC concurrent dan prioritas konfigurasi, cleanup koneksi gagal, logging paralel/sink gagal, serta k6 preflight/load untuk jumlah record dan isolasi endpoint. Cross-compile Linux64 berbeda dari bukti runtime Linux/native MySQL atau pengukuran throughput.
 
 Fixture gzip memakai bridge Indy/WebBroker sebenarnya pada loopback sementara, lalu memeriksa wire headers/bytes dengan Node.js HTTP dan decoder gzip independen. Executable dibangun ke TEMP dengan config dummy; listener dihentikan setelah setiap kasus. Tidak memakai API/database aplikasi nyata.
+
+## Batas request aktif dan diagnosis k6
+
+`DelphiAPIStarterKit.dpr:RunServer` membaca `[HTTP] MaxConcurrentRequests` (default 64, integer positif) dan menerapkannya pada `WebRequestHandler.MaxConnections` sebelum listener aktif. Startup menolak nilai invalid. Restart diperlukan. Batas ini adalah request/WebModule aktif, bukan jumlah koneksi TCP idle. Sesuaikan pool database dan kapasitas host jika menaikkan batas di atas beban yang sudah teruji.
+
+`docs/k6/api-read-test-all.js` menambah counter `api_response_status` dan `api_response_failure` dengan tag endpoint, phase, status dan klasifikasi error terbatas. `DIAGNOSTICS=1` menulis endpoint/status/klasifikasi kegagalan saja, tanpa token, ID, atau body respons. Validasi dan threshold tetap sama. Bukti Linux Dell: `docs/k6/dell5070-20261111/`.
+
+## Tambahan diagnosis Customer list pada 200 VU
+
+`App.WebModule.WebModuleAfterDispatch` kini mencatat `HTTP compression timing` hanya ketika `DELPHI_API_REQUEST_TIMING=1`. Field: route masked, status, compression_ms, content_encoding, content_bytes. Durasi mencakup Apply (negosiasi, encoding UTF-8, kompresi, penyiapan stream), bukan pengiriman socket. Timing ini terpisah dari pipeline `total_ms` sebelumnya; jangan menjumlahkan statistik persentil antar-fase.
+
+Deployment Dell memakai `GzipLevel=4` setelah A/B pada link Ethernet aktual 100 Mbps; default source tetap 1. Bukti: `docs/k6/dell5070-20261111/customer200-bottleneck-fix.md`. Endpoint, payload dan threshold tetap.

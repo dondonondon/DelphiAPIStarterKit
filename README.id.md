@@ -108,10 +108,13 @@ Kompresi HTTP JSON memakai nilai default berikut pada `config.ini` yang sama:
 
 ```ini
 [HTTP]
+MaxConcurrentRequests=64
 GzipEnabled=True
 GzipMinimumBytes=1024
 GzipLevel=1
 ```
+
+`MaxConcurrentRequests` membatasi request aktif WebBroker (default 64, harus bilangan bulat positif). Dibaca saat startup; restart setelah perubahan. Batas bawaan RTL adalah 32 dan dapat menghasilkan HTTP 500 sebelum masuk handler API saat terlampaui. Sesuaikan pool database dan kapasitas server sebelum menaikkan batas; nilai ini bukan jaminan kapasitas.
 
 Gzip dipakai ketika client menerimanya dan body UTF-8 mencapai batas minimum (1024 byte = 1 KiB). Level 1-9 menukar waktu CPU dengan rasio kompresi; level 1 mengutamakan kecepatan. Respons kecil dan hasil yang membesar tetap tanpa kompresi. Setting dibaca sekali dan memerlukan restart. Lihat [petunjuk benchmark gzip](docs/k6/benchmark.md#perbandingan-gzip-dan-identity).
 

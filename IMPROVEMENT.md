@@ -260,3 +260,15 @@ Validasi:
 - Fixture repetitif 247.872 byte menghasilkan gzip level 1 sebesar 7.019 byte. Ini ukuran fixture, bukan benchmark throughput/payload Customer produksi.
 - 15 skenario fixture k6 lulus, termasuk gzip/identity dan parsing JSON gzip; 13 skenario konfigurasi dengan 16.000 hash concurrent serta 124.348 pemeriksaan core sebelumnya juga lulus ulang.
 - Tidak menjalankan runtime Linux atau benchmark server nyata, deployment, maupun restart service. Rasio kompresi, CPU, dan p95/RPS Linux memerlukan A/B pada data/beban yang sama.
+
+## 11. Batas request WebBroker — Dell 5070 (11 November 2026)
+
+Diagnosis 50 VU pada database lokal mereproduksi HTTP 500 `Maximum number of concurrent connections exceeded`: 9/9 kegagalan diagnosis berasal dari batas aktif bawaan RTL 32. RunServer kini menerapkan `[HTTP] MaxConcurrentRequests` (default 64, integer positif) sebelum listener aktif. Database, pool dan threshold tidak diubah. Skrip k6 menambahkan counter status dan klasifikasi kegagalan tanpa isi respons/token.
+
+Build Linux64/Win64, penolakan konfigurasi invalid pada Linux, dan fixture k6 existing lulus. Benchmark 50 VU/60s setelah deploy: 32.120 request, 527,31 req/s, 0 gagal, checks 100%, p95 52,04 ms; seluruh threshold lulus. Maksimum 1,33 detik masih merupakan outlier. Bukti dan batas klaim: [catatan perbaikan](docs/k6/dell5070-20261111/concurrency-fix.md).
+
+## 12. Customer list pada 200 VU — link LAN 100 Mbps dan gzip
+
+Diagnosis menemukan link eno1 server bernegosiasi 100 Mbps (NIC mendukung gigabit, partner mengiklankan 10/100), terpisah dari paket internet rumah. Customer list menghasilkan 492.335 byte identity atau sekitar 63,1 KB pada gzip 1. Gzip level 4 pada deployment mengurangi respons menjadi sekitar 40,3 KB. Perbaikan tuning ini mempertahankan payload/query/auth dan threshold, dengan timing kompresi opsional default-off di App.WebModule.
+
+Benchmark akhir 200 VU/60s dengan limits/pool 200/200 dan timing OFF lulus: 76.904 request, 1.251,07 req/s, tanpa error, Customer list p95 172,25 ms dibanding 508,78 ms sebelumnya. Maksimum masih sekitar 3,24 detik. Build Linux64/Win64, fixture gzip 138 checks dan payload equality native MySQL lulus. Detail bukti/batas: [Customer 200 VU fix](docs/k6/dell5070-20261111/customer200-bottleneck-fix.md).

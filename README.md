@@ -117,10 +117,13 @@ HTTP JSON compression defaults to the following startup settings in the same `co
 
 ```ini
 [HTTP]
+MaxConcurrentRequests=64
 GzipEnabled=True
 GzipMinimumBytes=1024
 GzipLevel=1
 ```
+
+`MaxConcurrentRequests` limits active WebBroker requests (default 64, positive integer). Restart after changes. The RTL default of 32 can reject excess concurrent requests with HTTP 500 before API dispatch. Size the database pool and host resources before raising this limit; it is not a capacity guarantee.
 
 Gzip is used only when accepted by the client and the UTF-8 body reaches the minimum size (1024 bytes = 1 KiB). Levels 1-9 trade CPU time for compression ratio; level 1 favors speed. Smaller responses and output that would grow remain uncompressed. Settings are read once and require a restart. See [gzip benchmark instructions](docs/k6/benchmark.md#perbandingan-gzip-dan-identity).
 

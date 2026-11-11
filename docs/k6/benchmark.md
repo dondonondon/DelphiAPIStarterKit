@@ -141,3 +141,9 @@ node sources/tests/integration/k6-read-fixture.mjs
 ```
 
 Fixture membuka server HTTP pada port loopback acak dan memakai token dummy. Pengujian memeriksa delapan endpoint bawaan, list/detail terpisah, fixture 2.300 baris, kegagalan jumlah baris saat preflight/load, dan penolakan konfigurasi tidak valid. Listener dan file sementara ditutup/dihapus setelah selesai. Ini memvalidasi skrip k6; bukan koneksi database, aplikasi Delphi, atau throughput Windows/Linux.
+
+## Diagnosis batas WebBroker
+
+Aplikasi memakai `[HTTP] MaxConcurrentRequests=64` secara default; nilai harus integer positif dan perubahan memerlukan restart. Batas aktif WebBroker bukan jumlah koneksi TCP idle. RTL memakai 32 secara default, sehingga beban 50 VU dapat ditolak sebelum handler API berjalan walau CPU/RAM belum penuh. Pertimbangkan pool database dan resources ketika menaikkan batas.
+
+Untuk diagnosis, tambahkan `-e DIAGNOSTICS=1`. Log hanya memuat endpoint, status HTTP dan klasifikasi kegagalan; tidak memuat body/token/ID. Counter `api_response_status` dan `api_response_failure` juga tersedia. Klasifikasi `webbroker_connection_limit` mengenali pesan batas concurrent WebBroker. Threshold tetap mengharuskan checks 100%, error <1%, dan p95 <500 ms.

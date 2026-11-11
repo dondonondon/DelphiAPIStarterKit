@@ -123,6 +123,7 @@ config.*.local.ini
 
 # Project benchmark documentation and scripts
 !/docs/k6/
+!/docs/testing/
 !/docs/bootstraps/
 /docs/k6/result.ps1
 /docs/k6/result.txt
