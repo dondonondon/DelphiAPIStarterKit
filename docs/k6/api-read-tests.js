@@ -1,8 +1,8 @@
 import http from 'k6/http';
 import { check, group, sleep } from 'k6';
 
-const BASE_URL = __ENV.BASE_URL || 'http://127.0.0.1:9999';
-const API_TOKEN = __ENV.API_TOKEN || '';
+const BASE_URL = __ENV.BASE_URL || 'http://192.168.0.100:9000';
+const API_TOKEN = __ENV.API_TOKEN || 'd92cd2f726bcf111ab31000c2962e81a';
 
 const USER_ID = __ENV.USER_ID || '46b98046-ce79-4a00-9e27-1353c8de401a';
 const PRODUCT_ID = __ENV.PRODUCT_ID || '550e8400-e29b-41d4-a716-446655441003';

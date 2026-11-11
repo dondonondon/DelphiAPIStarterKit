@@ -279,6 +279,7 @@ begin
          RequestTimingElapsed(LStartTicks) * 1000.0 / TStopwatch.Frequency,
          Response.ContentEncoding, Response.ContentLength], GRequestTimingFormatSettings));
     except
+      // Diagnostics must not change the prepared response.
     end;
   end;
 end;

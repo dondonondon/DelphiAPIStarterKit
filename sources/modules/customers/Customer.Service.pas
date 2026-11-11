@@ -335,7 +335,10 @@ begin
     LPostalCode := LDataset.FieldByName('postal_code').AsString;
     LCountry := LDataset.FieldByName('country').AsString;
     LNotes := LDataset.FieldByName('notes').AsString;
-    LIsActive := LDataset.FieldByName('is_active').AsInteger;
+    if LDataset.FieldByName('is_active').DataType = ftBoolean then
+      LIsActive := Ord(LDataset.FieldByName('is_active').AsBoolean)
+    else
+      LIsActive := LDataset.FieldByName('is_active').AsInteger;
   finally
     FreeAndNil(LDataset);
   end;

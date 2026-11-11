@@ -46,7 +46,7 @@ type
 implementation
 
 uses
-  System.JSON, System.DateUtils, System.Generics.Collections,
+  System.JSON, System.JSON.Writers, System.DateUtils, System.Generics.Collections,
   BFA.Helper.Strings, BFA.Core.Messages;
 
 const
@@ -448,25 +448,99 @@ begin
   end;
 end;
 
+procedure WriteResponseField(AWriter: TJsonTextWriter; AField: TField);
+var
+  LValue: string;
+  LJSONValue: TJSONValue;
+begin
+  AWriter.WritePropertyName(AField.FieldName);
+  if AField.IsNull then begin
+    AWriter.WriteNull;
+    Exit;
+  end;
+  if AField.DataType in [ftDateTime, ftDate] then begin
+    if AField.DataType = ftDateTime then
+      AWriter.WriteValue(FormatDateTime('yyyy-mm-dd hh:nn:ss', AField.AsDateTime))
+    else
+      AWriter.WriteValue(FormatDateTime('yyyy-mm-dd', AField.AsDateTime));
+    AWriter.WritePropertyName(AField.FieldName + '_unix');
+    AWriter.WriteValue(DateTimeToUnix(AField.AsDateTime).ToString);
+    Exit;
+  end;
+  if AField.DataType = ftBoolean then begin
+    AWriter.WriteValue(AField.AsBoolean);
+    Exit;
+  end;
+  LValue := AField.AsString;
+  if ((LValue.Trim.StartsWith('{')) and (LValue.Trim.EndsWith('}'))) or
+     ((LValue.Trim.StartsWith('[')) and (LValue.Trim.EndsWith(']'))) or
+     TValueValidator.IsNumber(LValue) then begin
+    LJSONValue := JSONValueFromString(LValue);
+    try
+      AWriter.WriteRawValue(LJSONValue.ToJSON);
+    finally
+      LJSONValue.Free;
+    end;
+  end else
+    AWriter.WriteValue(LValue);
+end;
+
 class function THelperResponse.CreateResponse(AStatusCode: Integer;
   AMessage: string; ADataResponse, ARequest: TDataSet): string;
 var
-  LResponse: TJSONObject;
+  LText: TStringWriter;
+  LWriter: TJsonTextWriter;
   LRequestDetail: TJSONObject;
-  LData: TJSONArray;
+  LFields: TArray<TField>;
+  LField: TField;
 begin
-  LResponse := CreateResponseEnvelope(AStatusCode, AMessage);
+  LText := TStringWriter.Create;
   try
-    if Assigned(ARequest) and ARequest.Active and not ARequest.IsEmpty then begin
-      ARequest.First;
-      LRequestDetail := CreateDatasetObject(GetDatasetFields(ARequest), False);
-      LResponse.AddPair(REQUEST_DETAIL_PROPERTY, LRequestDetail);
+    LWriter := TJsonTextWriter.Create(LText, False);
+    try
+      LWriter.WriteStartObject;
+      LWriter.WritePropertyName(STATUS_PROPERTY);
+      LWriter.WriteValue(AStatusCode);
+      LWriter.WritePropertyName(MESSAGES_PROPERTY);
+      LWriter.WriteValue(AMessage);
+      LWriter.WritePropertyName(SERVER_TIME_PROPERTY);
+      LWriter.WriteValue(DateTimeToUnix(Now).ToString);
+      if Assigned(ARequest) and ARequest.Active and not ARequest.IsEmpty then begin
+        ARequest.First;
+        LRequestDetail := CreateDatasetObject(GetDatasetFields(ARequest), False);
+        try
+          LWriter.WritePropertyName(REQUEST_DETAIL_PROPERTY);
+          LWriter.WriteRawValue(LRequestDetail.ToJSON);
+        finally
+          LRequestDetail.Free;
+        end;
+      end;
+      LWriter.WritePropertyName(DATA_PROPERTY);
+      LWriter.WriteStartArray;
+      if not IsSuccessStatus(AStatusCode) then begin
+        LWriter.WriteStartObject;
+        LWriter.WriteEndObject;
+      end else if Assigned(ADataResponse) and ADataResponse.Active and
+        not ADataResponse.IsEmpty then begin
+        ADataResponse.First;
+        LFields := GetDatasetFields(ADataResponse);
+        while not ADataResponse.Eof do begin
+          LWriter.WriteStartObject;
+          for LField in LFields do
+            WriteResponseField(LWriter, LField);
+          LWriter.WriteEndObject;
+          ADataResponse.Next;
+        end;
+      end;
+      LWriter.WriteEndArray;
+      LWriter.WriteEndObject;
+      LWriter.Flush;
+      Result := LText.ToString;
+    finally
+      LWriter.Free;
     end;
-
-    LData := CreateDatasetArray(ADataResponse, True);
-    Result := SerializeResponse(LResponse, AStatusCode, LData);
   finally
-    FreeAndNil(LResponse);
+    LText.Free;
   end;
 end;
 

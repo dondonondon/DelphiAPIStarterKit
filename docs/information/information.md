@@ -162,10 +162,31 @@ Fixture gzip memakai bridge Indy/WebBroker sebenarnya pada loopback sementara, l
 
 `DelphiAPIStarterKit.dpr:RunServer` membaca `[HTTP] MaxConcurrentRequests` (default 64, integer positif) dan menerapkannya pada `WebRequestHandler.MaxConnections` sebelum listener aktif. Startup menolak nilai invalid. Restart diperlukan. Batas ini adalah request/WebModule aktif, bukan jumlah koneksi TCP idle. Sesuaikan pool database dan kapasitas host jika menaikkan batas di atas beban yang sudah teruji.
 
-`docs/k6/api-read-test-all.js` menambah counter `api_response_status` dan `api_response_failure` dengan tag endpoint, phase, status dan klasifikasi error terbatas. `DIAGNOSTICS=1` menulis endpoint/status/klasifikasi kegagalan saja, tanpa token, ID, atau body respons. Validasi dan threshold tetap sama. Bukti runtime dan hasil benchmark disimpan lokal, tidak dilacak Git.
+`docs/k6/api-read-test-all.js` menambah counter `api_response_status` dan `api_response_failure` dengan tag endpoint, phase, status dan klasifikasi error terbatas. `DIAGNOSTICS=1` menulis endpoint/status/klasifikasi kegagalan saja, tanpa token, ID, atau body respons. Validasi dan threshold tetap sama. Bukti Linux Dell: `docs/k6/dell5070-20261111/`.
 
 ## Tambahan diagnosis Customer list pada 200 VU
 
 `App.WebModule.WebModuleAfterDispatch` kini mencatat `HTTP compression timing` hanya ketika `DELPHI_API_REQUEST_TIMING=1`. Field: route masked, status, compression_ms, content_encoding, content_bytes. Durasi mencakup Apply (negosiasi, encoding UTF-8, kompresi, penyiapan stream), bukan pengiriman socket. Timing ini terpisah dari pipeline `total_ms` sebelumnya; jangan menjumlahkan statistik persentil antar-fase.
 
-Level gzip dipilih berdasarkan pengukuran pada payload dan jaringan deployment; default source tetap 1. Hasil benchmark dan diagnosis deployment disimpan lokal, tidak dilacak Git. Endpoint, payload dan threshold tetap.
+Deployment Dell memakai `GzipLevel=4` setelah A/B pada link Ethernet aktual 100 Mbps; default source tetap 1. Bukti: `docs/k6/dell5070-20261111/customer200-bottleneck-fix.md`. Endpoint, payload dan threshold tetap.
+
+## k6 Customer write/update workflows
+
+Entry point baru di docs/k6: customer-read-test.js, customer-write-test.js, customer-update-test.js, customer-full-flow-test.js dan customer-mixed-test.js. Implementasi bersama lib/customer-workload.js; panduan docs/k6/customer-workloads.md. Skrip menggunakan endpoint Customer existing tanpa perubahan kontrak API. Update/cleanup hanya memakai fixture milik run, dan operasi tulis memerlukan ALLOW_WRITE=1. Fixture HTTP lokal: sources/tests/integration/k6-customer-workload-fixture.mjs. Hasil run disimpan lokal di docs/k6/results/; tidak dipublish otomatis.
+
+## Customer partial update flag compatibility
+
+Customer.Service.Update reads is_active according to the provider field type: ftBoolean via AsBoolean/Ord, numeric fields via AsInteger. This fixes MySQL Boolean mapping without changing the PUT response's numeric 0/1 contract or transaction flow. Native retained-data regression: sources/tests/integration/customer-is-active-smoke.ps1 (BASE_URL, API_TOKEN and ALLOW_WRITE=1 required). It creates its own record, checks 0/1 plus omitted-field updates, and does not clean up. Run results stay local in docs/k6/results/.
+
+## Dataset response writer and Customer list index
+
+`BFA.Core.Response.WriteResponseField` and the dataset overload of `THelperResponse.CreateResponse` use `TJsonTextWriter` to serialize directly into the response string, without retaining a JSON object tree for every row. Field order, nested-string normalization, numeric/leading-zero conversion, null/Boolean, date/unix fields, request_detail and error envelopes retain their existing semantics. Other response overloads remain unchanged. Regression: `sources/tests/unit/SerializerRegression.dpr` (on-demand EOF, typed fields, escaping, errors).
+
+`docs/databases/customer-list-order-mysql8.sql` is an optional one-time MySQL 8 migration for the existing Customer list filter/order. It adds `(deleted_at, created_at DESC, customer_name ASC)` and refreshes optimizer statistics. Apply against the selected database only; inspect existing indexes first (running twice raises duplicate-index error). It does not change rows. MariaDB/older MySQL require separate plan validation for mixed-direction ordering. Customer.Repository.GetCustomers applies LIMIT 50 to the list query (latest created_at, then customer_name). The detail query and response fields remain unchanged; no cache/staleness change. Local benchmark evidence belongs under `docs/k6/results/`, outside published code.
+
+
+## HTTP admission queue
+
+`BFA.HTTP.Server.TBoundedHTTPWebBrokerBridge` gates dispatch before WebBroker activates a module. `RunServer` configures it from the existing positive `[HTTP] MaxConcurrentRequests`. It permits at most that many executing requests and the same number waiting; queued requests wait at most 5 seconds. Queue overflow/timeout returns the standard JSON HTTP 503 with Retry-After=1, never success. Worker/admission permits are released in finally, including handler exceptions. Indy routes non-GET commands through the virtual DoCommandGet method too, covering POST/PUT/DELETE. No per-request retry or DB connection sharing. Pool size still requires explicit configuration. Configure only once before listener startup; server teardown stops request threads before freeing semaphores.
+
+This prevents WebBroker's immediate `Maximum number of concurrent connections exceeded` HTTP 500 during bursts above its module limit. It does not promise all overloads succeed: 503 and latency thresholds remain failures under k6. DLL/standalone Indy bridge use is covered; alternate host adapters need their own admission handling. Diagnostics and benchmark logs remain local under docs/k6/results/.

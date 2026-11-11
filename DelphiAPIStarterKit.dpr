@@ -1,4 +1,4 @@
-program DelphiAPIStarterKit;
+﻿program DelphiAPIStarterKit;
 {$APPTYPE CONSOLE}
 
 uses
@@ -7,6 +7,7 @@ uses
   IPPeerServer,
   IPPeerAPI,
   IdHTTPWebBrokerBridge,
+  BFA.HTTP.Server in 'sources\infrastructure\http\BFA.HTTP.Server.pas',
   Web.WebReq,
   Web.WebBroker,
   App.WebModule in 'sources\app\App.WebModule.pas' {WM: TWebModule},
@@ -193,7 +194,7 @@ end;
 procedure RunServer(APort: Integer);
 var
   FormatBr: TFormatSettings;
-  LServer: TIdHTTPWebBrokerBridge;
+  LServer: TBoundedHTTPWebBrokerBridge;
   LVendorLib: string;
   LVendorHome: string;
   LMaxConcurrentRequests: Integer;
@@ -218,9 +219,10 @@ begin
     WebRequestHandler.MaxConnections := LMaxConcurrentRequests;
   TGlobalFunction.InitializeSecurity;
 
-  LServer := TIdHTTPWebBrokerBridge.Create(nil);
+  LServer := TBoundedHTTPWebBrokerBridge.Create(nil);
   DM := nil;
   try
+    LServer.ConfigureRequestLimit(LMaxConcurrentRequests);
     DM := TDM.Create(nil);
     LServer.DefaultPort := APort;
 

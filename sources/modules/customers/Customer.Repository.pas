@@ -106,7 +106,7 @@ begin
         Result,
         'SELECT customer_id, customer_name, email, phone_number, address_line1, address_line2, city, state, ' +
         'postal_code, country, notes, is_active, created_at ' +
-        'FROM customer WHERE deleted_at IS NULL ORDER BY created_at DESC, customer_name ASC',
+        'FROM customer WHERE deleted_at IS NULL ORDER BY created_at DESC, customer_name ASC LIMIT 50',
         True
       );
     end;

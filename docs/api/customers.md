@@ -29,7 +29,8 @@ Token is also accepted from `x-api-token` or `access-token`.
 
 ## GET /api/v1/Customer
 
-List all customers.
+Return at most 50 non-deleted customers, ordered by `created_at DESC, customer_name ASC`.
+The limit is applied in SQL before fetching and serializing records. The detail endpoint remains unchanged.
 
 ### Response - 200 OK
 
@@ -288,3 +289,7 @@ Soft-delete a customer by setting `is_active = 0` and `deleted_at = NOW()`.
 | 400 | `Invalid customer ID` | `customer_id` exceeds 36 characters |
 | 404 | `Customer not found` | No customer with the given ID |
 | 500 | `Internal server error.` | Unhandled exception |
+
+## Provider mapping compatibility
+
+Customer partial update accepts the existing numeric is_active request (0/1). When is_active is omitted, the stored flag is preserved even if FireDAC exposes the MySQL field as Boolean. PUT responses retain numeric 0/1; existing dataset GET responses may expose the provider-mapped Boolean. No database schema change is required.

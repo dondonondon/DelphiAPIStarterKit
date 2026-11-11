@@ -125,7 +125,42 @@ k6 run -e BASE_URL=http://192.168.0.110:9999 -e RESOURCE=Customer -e FIXED_VUS=5
 
 ## 5. Hasil benchmark Linux VM terakhir
 
-Hasil benchmark, timing runtime dan perbandingan mesin disimpan lokal, tidak dilacak Git. Gunakan [panduan benchmark](docs/k6/benchmark.md) untuk menjalankan pengukuran pada lingkungan sendiri; hasil lokal bukan jaminan kapasitas produksi.
+Sumber: snapshot [docs/k6/result.txt](docs/k6/result.txt) dan [docs/k6/DelphiAPIStarterKit-timing.log](docs/k6/DelphiAPIStarterKit-timing.log) yang disediakan pemilik. Angka berikut dipertahankan sebagai snapshot pencatatan; file hasil dapat diperbarui pada pengujian berikutnya.
+
+| Metrik k6 | Hasil |
+|---|---:|
+| Target | `192.168.0.110:9999` |
+| Durasi aktual | 75,7 detik |
+| VU maksimum tercapai | 25 |
+| Total request | 7.272 |
+| Throughput gabungan rata-rata | 96,07 request/detik |
+| Request gagal | 0% |
+| Checks berhasil | 61.812 dari 61.812 (100%) |
+| Rata-rata HTTP keseluruhan | 33,61 ms |
+| p95 HTTP keseluruhan | 185,56 ms |
+| p99 HTTP keseluruhan | 388,26 ms |
+| Rata-rata HTTP Customer list | 197,83 ms |
+| p95 HTTP Customer list | 415,05 ms |
+| p99 HTTP Customer list | 530,17 ms |
+| Respons maksimum | 750,09 ms |
+| Request Customer list selama load | 908, sekitar 12 request/detik |
+| Iterasi selesai / terputus | 908 / 0 |
+| Status threshold global dan per endpoint | LULUS |
+
+Customer list berisi 100 baris. Dari 907 baris timing Customer list yang utuh:
+
+| Bagian service | Rata-rata | p95 |
+|---|---:|---:|
+| Query/open, termasuk fetch awal | 32,99 ms | 46,21 ms |
+| Fetch lanjutan | 0 ms | 0 ms |
+| Pembentukan JSON | 19,41 ms | 28,04 ms |
+| Gabungan query dan JSON | 52,40 ms | 71,27 ms |
+
+Ukuran JSON Customer list adalah 492.335 byte, sekitar 481 KiB. Tidak ada fetch lanjutan yang tercatat untuk 100 baris pada run ini; biaya fetch awal sudah masuk query/open.
+
+Selisih rata-rata HTTP Customer list dengan waktu service sekitar 145 ms. Ini perkiraan dari dua kumpulan sampel yang tidak dipasangkan per request; belum dapat diatribusikan ke jaringan saja. Pembukaan koneksi, autentikasi, antrean pemrosesan, encoding/pengiriman respons, dan jaringan belum diukur terpisah.
+
+Hasil menunjukkan performa baca yang memenuhi target pada skenario ini. Cache locale adalah perubahan yang langsung mengurangi pekerjaan serializer, tetapi besarnya kontribusi tunggalnya memerlukan perbandingan dengan data, binary, instrumentasi, dan kondisi beban yang setara. Hasil ini belum membuktikan kapasitas maksimum atau ketahanan jangka panjang pada 25 VU tetap.
 
 ## 6. Validasi yang telah dilakukan
 
@@ -150,7 +185,7 @@ Hasil benchmark, timing runtime dan perbandingan mesin disimpan lokal, tidak dil
 
 - [docs/k6/benchmark.md](docs/k6/benchmark.md): cara menjalankan benchmark, environment timing, serta interpretasi metrik.
 - [docs/information/information.md](docs/information/information.md): peta logger, serializer, dan alur timing untuk navigasi source.
-- Snapshot perbandingan mesin disimpan lokal dan tidak dilacak Git.
+- [docs/k6/compare.md](docs/k6/compare.md): snapshot perbandingan mesin yang sebelumnya dicatat atas permintaan pemilik; tidak diperbarui oleh penulisan dokumen ini.
 - `DelphiAPIStarterKit.dpr`: pengaturan format global, port, dan konfigurasi library Linux milik pemilik dipertahankan pada tahap optimasi ini; tidak diklaim sebagai perubahan asisten.
 
 Penulisan `IMPROVEMENT.md` ini hanya mendokumentasikan implementasi dan bukti yang sudah ada. Tidak sekaligus memperbaiki sinkronisasi logger, mengubah API/database, menambahkan pagination, atau menjalankan benchmark/deployment baru.
@@ -230,10 +265,10 @@ Validasi:
 
 Diagnosis 50 VU pada database lokal mereproduksi HTTP 500 `Maximum number of concurrent connections exceeded`: 9/9 kegagalan diagnosis berasal dari batas aktif bawaan RTL 32. RunServer kini menerapkan `[HTTP] MaxConcurrentRequests` (default 64, integer positif) sebelum listener aktif. Database, pool dan threshold tidak diubah. Skrip k6 menambahkan counter status dan klasifikasi kegagalan tanpa isi respons/token.
 
-Build Linux64/Win64, penolakan konfigurasi invalid pada Linux, dan fixture k6 existing lulus. Hasil benchmark dan bukti runtime disimpan lokal, tidak dilacak Git; hasil run tertentu tidak merupakan jaminan kapasitas produksi.
+Build Linux64/Win64, penolakan konfigurasi invalid pada Linux, dan fixture k6 existing lulus. Benchmark 50 VU/60s setelah deploy: 32.120 request, 527,31 req/s, 0 gagal, checks 100%, p95 52,04 ms; seluruh threshold lulus. Maksimum 1,33 detik masih merupakan outlier. Bukti dan batas klaim: [catatan perbaikan](docs/k6/dell5070-20261111/concurrency-fix.md).
 
 ## 12. Customer list pada 200 VU — link LAN 100 Mbps dan gzip
 
 Diagnosis menemukan link eno1 server bernegosiasi 100 Mbps (NIC mendukung gigabit, partner mengiklankan 10/100), terpisah dari paket internet rumah. Customer list menghasilkan 492.335 byte identity atau sekitar 63,1 KB pada gzip 1. Gzip level 4 pada deployment mengurangi respons menjadi sekitar 40,3 KB. Perbaikan tuning ini mempertahankan payload/query/auth dan threshold, dengan timing kompresi opsional default-off di App.WebModule.
 
-Build Linux64/Win64, fixture gzip dan payload equality native MySQL lulus. Hasil benchmark dan diagnosis deployment disimpan lokal, tidak dilacak Git. Pengaturan kompresi perlu diukur pada payload dan jaringan deployment masing-masing.
+Benchmark akhir 200 VU/60s dengan limits/pool 200/200 dan timing OFF lulus: 76.904 request, 1.251,07 req/s, tanpa error, Customer list p95 172,25 ms dibanding 508,78 ms sebelumnya. Maksimum masih sekitar 3,24 detik. Build Linux64/Win64, fixture gzip 138 checks dan payload equality native MySQL lulus. Detail bukti/batas: [Customer 200 VU fix](docs/k6/dell5070-20261111/customer200-bottleneck-fix.md).
