@@ -162,10 +162,10 @@ Fixture gzip memakai bridge Indy/WebBroker sebenarnya pada loopback sementara, l
 
 `DelphiAPIStarterKit.dpr:RunServer` membaca `[HTTP] MaxConcurrentRequests` (default 64, integer positif) dan menerapkannya pada `WebRequestHandler.MaxConnections` sebelum listener aktif. Startup menolak nilai invalid. Restart diperlukan. Batas ini adalah request/WebModule aktif, bukan jumlah koneksi TCP idle. Sesuaikan pool database dan kapasitas host jika menaikkan batas di atas beban yang sudah teruji.
 
-`docs/k6/api-read-test-all.js` menambah counter `api_response_status` dan `api_response_failure` dengan tag endpoint, phase, status dan klasifikasi error terbatas. `DIAGNOSTICS=1` menulis endpoint/status/klasifikasi kegagalan saja, tanpa token, ID, atau body respons. Validasi dan threshold tetap sama. Bukti Linux Dell: `docs/k6/dell5070-20261111/`.
+`docs/k6/api-read-test-all.js` menambah counter `api_response_status` dan `api_response_failure` dengan tag endpoint, phase, status dan klasifikasi error terbatas. `DIAGNOSTICS=1` menulis endpoint/status/klasifikasi kegagalan saja, tanpa token, ID, atau body respons. Validasi dan threshold tetap sama. Bukti runtime dan hasil benchmark disimpan lokal, tidak dilacak Git.
 
 ## Tambahan diagnosis Customer list pada 200 VU
 
 `App.WebModule.WebModuleAfterDispatch` kini mencatat `HTTP compression timing` hanya ketika `DELPHI_API_REQUEST_TIMING=1`. Field: route masked, status, compression_ms, content_encoding, content_bytes. Durasi mencakup Apply (negosiasi, encoding UTF-8, kompresi, penyiapan stream), bukan pengiriman socket. Timing ini terpisah dari pipeline `total_ms` sebelumnya; jangan menjumlahkan statistik persentil antar-fase.
 
-Deployment Dell memakai `GzipLevel=4` setelah A/B pada link Ethernet aktual 100 Mbps; default source tetap 1. Bukti: `docs/k6/dell5070-20261111/customer200-bottleneck-fix.md`. Endpoint, payload dan threshold tetap.
+Level gzip dipilih berdasarkan pengukuran pada payload dan jaringan deployment; default source tetap 1. Hasil benchmark dan diagnosis deployment disimpan lokal, tidak dilacak Git. Endpoint, payload dan threshold tetap.

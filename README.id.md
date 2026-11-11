@@ -312,21 +312,7 @@ http://localhost:9381
 
 ## Benchmark Baca k6
 
-Pada 31 Oktober 2026, build Win64 Release diuji dengan k6 dan API pada host Windows yang sama; MySQL 8.4.11 berjalan pada host terpisah melalui jaringan. Pengujian memakai 30 virtual user tetap selama 60 detik, ditambah waktu penyelesaian, terhadap delapan endpoint GET list/detail User, Product, Category, dan Customer. Preflight menghasilkan 1 User, 8 Product, 5 Category, dan 100 Customer.
-
-| Metrik | Hasil |
-|---|---:|
-| Request, termasuk preflight | 13.992 |
-| Throughput gabungan | 229,82 request/detik |
-| Request gagal | 0% |
-| Pemeriksaan respons lulus | 118.932 / 118.932 |
-| HTTP rata-rata / p95 / p99 | 53,13 / 165,77 / 276,77 ms |
-| Durasi HTTP maksimum | 654,87 ms |
-| Iterasi selesai / terputus | 1.748 / 0 |
-
-Seluruh threshold lulus, termasuk p95 di bawah 500 ms untuk setiap endpoint. Customer list paling lambat, dengan rata-rata 135,05 ms dan p95 300,27 ms. Fase beban mengirim 1.748 request ke setiap endpoint. Metrik global mencakup preflight; throughput menggabungkan semua endpoint dan mengikuti jeda dalam skrip. Tes baca singkat ini belum membuktikan kapasitas maksimum atau ketahanan jangka panjang. Endpoint gambar, alur autentikasi, dan operasi tulis tidak diuji; jumlah baris berasal dari respons dan belum diverifikasi terpisah terhadap database.
-
-Lihat [panduan benchmark](docs/k6/benchmark.md) untuk profil beban, konfigurasi, dan interpretasi hasil.
+Hasil benchmark disimpan lokal dan tidak dilacak Git. Lihat [panduan benchmark](docs/k6/benchmark.md) untuk profil beban, konfigurasi, dan interpretasi.
 
 ## API Quickstart
 

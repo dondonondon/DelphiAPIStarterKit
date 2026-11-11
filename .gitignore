@@ -123,7 +123,6 @@ config.*.local.ini
 
 # Project benchmark documentation and scripts
 !/docs/k6/
-!/docs/testing/
 !/docs/bootstraps/
 /docs/k6/result.ps1
 /docs/k6/result.txt
@@ -131,3 +130,13 @@ config.*.local.ini
 /docs/bootstraps
 /sources/tests
 /.ai
+
+# Local benchmark and test results (keep on disk, never publish)
+/docs/k6/dell*/
+/docs/k6/results/
+/docs/k6/runs/
+/docs/k6/compare.md
+/docs/k6/*-result*.json
+/docs/k6/*-result*.txt
+/docs/k6/*-summary.json
+/docs/testing/

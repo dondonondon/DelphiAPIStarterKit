@@ -321,21 +321,7 @@ http://localhost:9381
 
 ## k6 Read Benchmark
 
-On 31 October 2026, the Win64 Release build was tested with k6 and the API on the same Windows host; MySQL 8.4.11 ran on a separate host over the network. The test used 30 fixed virtual users for 60 seconds, plus graceful completion, against eight GET list/detail endpoints for User, Product, Category, and Customer. The preflight returned 1 user, 8 products, 5 categories, and 100 customers.
-
-| Metric | Result |
-|---|---:|
-| Requests, including preflight | 13,992 |
-| Combined throughput | 229.82 requests/s |
-| Failed requests | 0% |
-| Response checks passed | 118,932 / 118,932 |
-| HTTP average / p95 / p99 | 53.13 / 165.77 / 276.77 ms |
-| Maximum HTTP duration | 654.87 ms |
-| Completed / interrupted iterations | 1,748 / 0 |
-
-All thresholds passed, including p95 below 500 ms for every endpoint. Customer list was the slowest, with 135.05 ms average and 300.27 ms p95. The load phase sent 1,748 requests to each endpoint. Global metrics include preflight; throughput combines all endpoints and reflects the script's pacing. This short read-only test does not establish maximum capacity or long-term stability. Image, authentication workflows, and write operations were excluded; row counts were observed from responses and not independently verified against the database.
-
-See the [benchmark guide](docs/k6/benchmark.md) for the workload, configuration, and interpretation.
+Benchmark results are kept locally and are not tracked in Git. See the [benchmark guide](docs/k6/benchmark.md) for the workload, configuration, and interpretation.
 
 ## API Quickstart
 
